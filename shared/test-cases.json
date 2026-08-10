@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "cases": [
+    {"name": "single-a", "mode": "KZ", "events": [["a", 0]], "flush_at": 401, "output": "а"},
+    {"name": "single-W", "mode": "KZ", "events": [["w", 0, "shift"]], "output": "Ұ"},
+    {"name": "fast-aa", "mode": "KZ", "events": [["a", 0], ["a", 100]], "output": "ә"},
+    {"name": "boundary-400", "mode": "KZ", "events": [["s", 0], ["s", 400]], "output": "ш"},
+    {"name": "slow-401", "mode": "KZ", "events": [["s", 0], ["s", 401]], "flush_at": 802, "output": "сс"},
+    {"name": "triple-a", "mode": "KZ", "events": [["a", 0], ["a", 100], ["a", 200]], "flush_at": 601, "output": "әа"},
+    {"name": "fast-qq", "mode": "KZ", "events": [["q", 0], ["q", 100]], "output": "", "final_mode": "EN"}
+  ]
+}
+

@@ -1,0 +1,5 @@
+/target/
+/platforms/macos/build/
+.DS_Store
+*.xcuserstate
+xcuserdata/

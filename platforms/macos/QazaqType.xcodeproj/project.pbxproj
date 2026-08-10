@@ -1,0 +1,139 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXFileReference section */
+		AA0000010000000000000001 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		AA0000010000000000000002 /* QazaqInputController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QazaqInputController.swift; sourceTree = "<group>"; };
+		AA0000010000000000000003 /* QazaqCore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = QazaqCore.h; sourceTree = "<group>"; };
+		AA0000010000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA0000010000000000000005 /* QazaqPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QazaqPreferences.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		AA0000020000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				AA0000020000000000000002 /* InputMethod */,
+				AA0000020000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA0000020000000000000002 /* InputMethod */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000010000000000000001 /* main.swift */,
+				AA0000010000000000000002 /* QazaqInputController.swift */,
+				AA0000010000000000000005 /* QazaqPreferences.swift */,
+				AA0000010000000000000003 /* QazaqCore.h */,
+				AA0000010000000000000004 /* Info.plist */,
+			);
+			path = InputMethod;
+			sourceTree = "<group>";
+		};
+		AA0000020000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXLegacyTarget section */
+		AA0000030000000000000001 /* QazaqType */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "\"$(SRCROOT)/../../scripts/build-macos.sh\"";
+			buildConfigurationList = AA0000050000000000000002 /* Build configuration list for PBXLegacyTarget "QazaqType" */;
+			buildPhases = (
+			);
+			buildToolPath = /bin/sh;
+			buildWorkingDirectory = "$(SRCROOT)/../..";
+			dependencies = (
+			);
+			name = QazaqType;
+			passBuildSettingsInEnvironment = 1;
+			productName = QazaqType;
+		};
+/* End PBXLegacyTarget section */
+
+/* Begin PBXProject section */
+		AA0000040000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1420;
+				LastSwiftUpdateCheck = 1420;
+			};
+			buildConfigurationList = AA0000050000000000000001 /* Build configuration list for PBXProject "QazaqType" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA0000020000000000000001;
+			productRefGroup = AA0000020000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA0000030000000000000001 /* QazaqType */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		AA0000060000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		AA0000060000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		AA0000060000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		AA0000060000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA0000050000000000000001 /* Build configuration list for PBXProject "QazaqType" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000060000000000000001 /* Debug */,
+				AA0000060000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000050000000000000002 /* Build configuration list for PBXLegacyTarget "QazaqType" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000060000000000000003 /* Debug */,
+				AA0000060000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA0000040000000000000001 /* Project object */;
+}
