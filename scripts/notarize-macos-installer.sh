@@ -2,7 +2,7 @@
 set -eu
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-source_plist="$project_dir/platforms/macos/GuideInstaller/Info.plist"
+source_plist="$project_dir/platforms/macos/InputMethod/Info.plist"
 version=$(
     /usr/libexec/PlistBuddy -c \
         "Print :CFBundleShortVersionString" \
