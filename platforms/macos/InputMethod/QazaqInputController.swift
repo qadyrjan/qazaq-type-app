@@ -110,7 +110,45 @@ final class QazaqInputController: IMKInputController {
         cyrillic.state = runtimeConfig.layout == QazaqPreferences.cyrillicLayout ? .on : .off
         menu.addItem(latin)
         menu.addItem(cyrillic)
+        menu.addItem(.separator())
+        menu.addItem(
+            NSMenuItem(
+                title: "QazaqType баптаулары…",
+                action: #selector(openSettings(_:)),
+                keyEquivalent: ""
+            )
+        )
         return menu
+    }
+
+    @objc func openSettings(_ sender: Any!) {
+        NSWorkspace.shared.openApplication(
+            at: Self.settingsURL,
+            configuration: NSWorkspace.OpenConfiguration()
+        )
+    }
+
+    private static var settingsURL: URL {
+        Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/QazaqType Settings.app")
+    }
+
+    override func activateServer(_ sender: Any!) {
+        super.activateServer(sender)
+        // The input method never uses the network itself. Once a day it asks
+        // the settings helper, a separate process, to look for a release.
+        guard QazaqPreferences.claimDailyUpdateCheck() else {
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.arguments = ["--check-for-updates"]
+        configuration.activates = false
+        configuration.addsToRecentItems = false
+        configuration.promptsUserIfNeeded = false
+        NSWorkspace.shared.openApplication(
+            at: Self.settingsURL,
+            configuration: configuration
+        )
     }
 
     @objc func selectLatinLayout(_ sender: Any!) {

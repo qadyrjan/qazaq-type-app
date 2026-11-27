@@ -7,6 +7,8 @@ struct QazaqRuntimeConfig {
     let showModeNotification: Bool
     /// `QazaqPreferences.latinLayout` or `QazaqPreferences.cyrillicLayout`.
     let layout: UInt32
+    /// Whether the settings helper looks for a new release once a day.
+    let checkForUpdates: Bool
 }
 
 enum QazaqPreferences {
@@ -26,7 +28,11 @@ enum QazaqPreferences {
         static let thresholdMilliseconds = "doublePressThresholdMilliseconds"
         static let showModeNotification = "showModeNotification"
         static let layout = "keyboardLayout"
+        static let checkForUpdates = "checkForUpdates"
+        static let lastUpdateCheck = "lastUpdateCheck"
     }
+
+    private static let updateCheckInterval: TimeInterval = 24 * 60 * 60
 
     private enum LayoutValue {
         static let latin = "latin"
@@ -48,13 +54,17 @@ enum QazaqPreferences {
             forKey: Key.showModeNotification
         ) as? Bool ?? true
         let layout = defaults.object(forKey: Key.layout) as? String
+        let checkForUpdates = defaults.object(
+            forKey: Key.checkForUpdates
+        ) as? Bool ?? true
 
         return QazaqRuntimeConfig(
             enabled: enabled,
             defaultMode: mode == "EN" ? 1 : 0,
             thresholdMilliseconds: UInt64(threshold),
             showModeNotification: showNotification,
-            layout: layout == LayoutValue.cyrillic ? cyrillicLayout : latinLayout
+            layout: layout == LayoutValue.cyrillic ? cyrillicLayout : latinLayout,
+            checkForUpdates: checkForUpdates
         )
     }
 
@@ -73,7 +83,24 @@ enum QazaqPreferences {
             forKey: Key.showModeNotification
         )
         defaults.set(layoutValue(config.layout), forKey: Key.layout)
+        defaults.set(config.checkForUpdates, forKey: Key.checkForUpdates)
         postChanged()
+    }
+
+    /// Returns true at most once a day while update checks are enabled, and
+    /// records the attempt so other input sessions do not repeat it.
+    static func claimDailyUpdateCheck(now: Date = Date()) -> Bool {
+        guard let defaults = UserDefaults(suiteName: suiteName),
+              defaults.object(forKey: Key.checkForUpdates) as? Bool ?? true
+        else {
+            return false
+        }
+        let last = defaults.double(forKey: Key.lastUpdateCheck)
+        guard now.timeIntervalSince1970 - last >= updateCheckInterval else {
+            return false
+        }
+        defaults.set(now.timeIntervalSince1970, forKey: Key.lastUpdateCheck)
+        return true
     }
 
     /// Changes only the keyboard layout, keeping every other setting.
@@ -103,6 +130,7 @@ enum QazaqPreferences {
         defaultMode: 0,
         thresholdMilliseconds: 400,
         showModeNotification: true,
-        layout: latinLayout
+        layout: latinLayout,
+        checkForUpdates: true
     )
 }

@@ -16,6 +16,7 @@ private enum InstallerStage {
     case installing
     case needsLoginRefresh
     case needsActivation
+    case updateAvailable
     case ready
     case failed
 }
@@ -27,6 +28,9 @@ private final class InstallerModel: ObservableObject {
     @Published private(set) var isEnabled = false
     @Published private(set) var isSelected = false
     @Published private(set) var hasLegacySystemInstallation = false
+    @Published private(set) var installedVersion: String?
+    @Published private(set) var embeddedVersion: String?
+    private var isUpdating = false
     @Published private(set) var detail =
         "Орнату алдында жұмысыңызды сақтаңыз. Алғашқы орнатудан кейін macOS жүйеден шығып, қайта кіруді сұрауы мүмкін."
 
@@ -46,6 +50,8 @@ private final class InstallerModel: ObservableObject {
             return "Қайта тексеру"
         case .needsActivation:
             return "QazaqType-ты қосу"
+        case .updateAvailable:
+            return "Жаңарту"
         case .ready:
             return "Қайта тексеру"
         case .failed:
@@ -67,6 +73,8 @@ private final class InstallerModel: ObservableObject {
             return "Жүйеге қайта кіру қажет"
         case .needsActivation:
             return "Енгізу әдісін қосу"
+        case .updateAvailable:
+            return "Жаңа нұсқа қолжетімді"
         case .ready:
             return "QazaqType пайдалануға дайын"
         case .failed:
@@ -84,6 +92,8 @@ private final class InstallerModel: ObservableObject {
             return "macOS QazaqType-ты енгізу әдістері тізіміне әлі қоспады. Жүйеден шығып, қайта кірген соң орнатқышты қайта ашыңыз."
         case .needsActivation:
             return "macOS растау сұрағын көрсетсе, «Рұқсат ету» түймесін басыңыз немесе пернетақта баптауларынан қолмен қосыңыз."
+        case .updateAvailable:
+            return "Орнатылған нұсқа: \(installedVersion ?? "—"). Жаңа нұсқа: \(embeddedVersion ?? "—"). Баптауларыңыз сақталады, жүйеден шығудың қажеті жоқ."
         case .ready:
             return "Енді мәзір жолағынан QazaqType-ты таңдауға болады."
         case .failed:
@@ -93,7 +103,7 @@ private final class InstallerModel: ObservableObject {
 
     func runPrimaryAction() {
         switch stage {
-        case .welcome, .failed:
+        case .welcome, .failed, .updateAvailable:
             install()
         case .needsLoginRefresh:
             refreshState()
@@ -110,8 +120,9 @@ private final class InstallerModel: ObservableObject {
     }
 
     func install() {
+        isUpdating = stage == .updateAvailable
         stage = .installing
-        detail = "QazaqType дайындалуда…"
+        detail = isUpdating ? "QazaqType жаңартылуда…" : "QazaqType дайындалуда…"
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             do {
@@ -124,6 +135,9 @@ private final class InstallerModel: ObservableObject {
                 let destinationURL = try self.installDestination(
                     embeddedSource: sourceURL
                 )
+                // The old version keeps running from memory until it quits.
+                // macOS starts the new copy on the next key press.
+                self.stopRunningInputMethod()
 
                 let registerStatus = TISRegisterInputSource(
                     destinationURL as CFURL
@@ -184,7 +198,10 @@ private final class InstallerModel: ObservableObject {
             let selectStatus = TISSelectInputSource(refreshedSource)
             self.refreshState()
             self.stage = .ready
-            if selectStatus == noErr {
+            if self.isUpdating {
+                self.isUpdating = false
+                self.detail = "QazaqType \(self.installedVersion ?? "") нұсқасына жаңартылды."
+            } else if selectStatus == noErr {
                 self.detail = "Орнату, қосу және ауыстыру сәтті аяқталды."
             } else {
                 self.detail =
@@ -199,6 +216,10 @@ private final class InstallerModel: ObservableObject {
         let hasUserInstallation =
             isKnownInputMethodBundle(at: userInputMethodURL)
         isInstalled = hasLegacySystemInstallation || hasUserInstallation
+        installedVersion = hasUserInstallation
+            ? shortVersion(at: userInputMethodURL)
+            : nil
+        embeddedVersion = (try? embeddedInputMethodURL()).flatMap(shortVersion(at:))
 
         if hasLegacySystemInstallation && !hasUserInstallation {
             isRegistered = false
@@ -239,7 +260,50 @@ private final class InstallerModel: ObservableObject {
         )
 
         if stage != .installing && stage != .failed {
-            stage = isEnabled ? .ready : .needsActivation
+            if let installedVersion, let embeddedVersion,
+               isVersion(embeddedVersion, newerThan: installedVersion) {
+                stage = .updateAvailable
+                detail = "Жаңарту ескі нұсқаны алмастырады. Пернетақта таңдауыңыз бен басқа баптаулар өзгермейді."
+            } else {
+                stage = isEnabled ? .ready : .needsActivation
+            }
+        }
+    }
+
+    /// Reads the version from disk; `Bundle` caches Info.plist per path, so
+    /// it would keep reporting the replaced version after an update.
+    private func shortVersion(at url: URL) -> String? {
+        let plist = url.appendingPathComponent("Contents/Info.plist")
+        return NSDictionary(contentsOf: plist)?["CFBundleShortVersionString"] as? String
+    }
+
+    private func isVersion(_ candidate: String, newerThan current: String) -> Bool {
+        func parts(_ value: String) -> [Int] {
+            value.split(separator: ".").map { Int($0.prefix { $0.isNumber }) ?? 0 }
+        }
+        let lhs = parts(candidate)
+        let rhs = parts(current)
+        for index in 0..<max(lhs.count, rhs.count) {
+            let left = index < lhs.count ? lhs[index] : 0
+            let right = index < rhs.count ? rhs[index] : 0
+            if left != right {
+                return left > right
+            }
+        }
+        return false
+    }
+
+    private func stopRunningInputMethod() {
+        let running = NSRunningApplication.runningApplications(
+            withBundleIdentifier: InstallerConstants.inputMethodBundleIdentifier
+        )
+        for application in running {
+            application.terminate()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            for application in running where !application.isTerminated {
+                application.forceTerminate()
+            }
         }
     }
 

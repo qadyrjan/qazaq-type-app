@@ -92,3 +92,21 @@ Still required:
 
 - typing tests in real macOS applications
 - measuring harmony accuracy on a Kazakh text corpus
+
+## Phase 5 — updates
+
+Status: in progress
+
+Implemented:
+
+- installer detects an older installed version, offers “Жаңарту”, replaces
+  the bundle, and stops the old input method process
+- daily release check in the settings helper (never in the input method),
+  with a settings switch and a “check now” button
+- downloaded installers must carry QazaqType's Developer ID signature
+- single version source in the input method Info.plist
+
+Still required:
+
+- a public GitHub repository or another public release endpoint
+- end-to-end update test from a published release

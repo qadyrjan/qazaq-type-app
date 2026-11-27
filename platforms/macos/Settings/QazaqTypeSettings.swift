@@ -1,6 +1,16 @@
 import SwiftUI
 
 @main
+enum QazaqTypeSettingsMain {
+    static func main() {
+        if CommandLine.arguments.contains(BackgroundUpdateCheck.argument) {
+            BackgroundUpdateCheck.run()
+        } else {
+            QazaqTypeSettingsApp.main()
+        }
+    }
+}
+
 struct QazaqTypeSettingsApp: App {
     @StateObject private var model = SettingsModel()
 
@@ -19,6 +29,7 @@ private final class SettingsModel: ObservableObject {
     @Published var thresholdMilliseconds: UInt64
     @Published var showModeNotification: Bool
     @Published var layout: UInt32
+    @Published var checkForUpdates: Bool
 
     init() {
         let config = QazaqPreferences.load()
@@ -27,6 +38,7 @@ private final class SettingsModel: ObservableObject {
         thresholdMilliseconds = config.thresholdMilliseconds
         showModeNotification = config.showModeNotification
         layout = config.layout
+        checkForUpdates = config.checkForUpdates
     }
 
     func save() {
@@ -36,7 +48,8 @@ private final class SettingsModel: ObservableObject {
                 defaultMode: defaultMode,
                 thresholdMilliseconds: thresholdMilliseconds,
                 showModeNotification: showModeNotification,
-                layout: layout
+                layout: layout,
+                checkForUpdates: checkForUpdates
             )
         )
     }
@@ -47,6 +60,7 @@ private final class SettingsModel: ObservableObject {
         thresholdMilliseconds = 400
         showModeNotification = true
         layout = QazaqPreferences.latinLayout
+        checkForUpdates = true
         save()
     }
 }
@@ -124,6 +138,12 @@ private struct GeneralSettingsView: View {
                 isOn: $model.showModeNotification
             )
             .onChange(of: model.showModeNotification) { _ in model.save() }
+
+            Toggle(
+                "Жаңартуларды күн сайын тексеру",
+                isOn: $model.checkForUpdates
+            )
+            .onChange(of: model.checkForUpdates) { _ in model.save() }
 
             HStack {
                 Spacer()
@@ -205,7 +225,8 @@ private struct PrivacyView: View {
         VStack(alignment: .leading, spacing: 14) {
             Label("Барлық түрлендіру осы Mac ішінде орындалады", systemImage: "checkmark.shield")
                 .font(.title2.bold())
-            Text("QazaqType интернет байланысын қажет етпейді.")
+            Text("Түрлендіру интернетсіз жұмыс істейді. Енгізу әдісінің өзі желіге ешқашан шықпайды.")
+            Text("Жаңартуларды тексеру қосулы болса, осы баптаулар көмекшісі күніне бір рет GitHub-тан соңғы нұсқа нөмірін ғана сұрайды. Оны «Жалпы» бетінде өшіруге болады.")
             Text("Енгізілген мәтін, пернелер және жазу тарихы сақталмайды немесе серверге жіберілмейді.")
             Text("Құпиясөз өрістері мен қауіпсіз енгізу аймақтарында macOS шектеулері толық сақталады.")
             Spacer()
@@ -228,15 +249,54 @@ private struct AboutView: View {
         return icon
     }
 
+    @State private var isChecking = false
+    @State private var status: String?
+
+    private func checkNow() {
+        isChecking = true
+        status = nil
+        let installed = QazaqUpdater.installedVersion
+        QazaqUpdater.fetchLatest { result in
+            switch result {
+            case let .success(release)
+                where QazaqUpdater.isVersion(release.version, newerThan: installed):
+                QazaqUpdater.offer(release, installed: installed) {
+                    isChecking = false
+                }
+            case .success, .failure(QazaqUpdater.Failure.noRelease):
+                isChecking = false
+                status = "Сізде соңғы нұсқа орнатылған."
+            case .failure:
+                isChecking = false
+                status = "Тексеру мүмкін болмады. Интернет байланысын тексеріңіз."
+            }
+        }
+    }
+
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
+        return "Нұсқа \(short)"
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             Image(nsImage: appIcon)
                 .resizable()
                 .frame(width: 72, height: 72)
             Text("QazaqType").font(.largeTitle.bold())
-            Text("0.1.3 development")
+            Text(version)
             Text("Қазақ тіліне арналған офлайн жүйелік енгізу әдісі")
                 .foregroundColor(.secondary)
+            Button(isChecking ? "Тексерілуде…" : "Жаңартуларды тексеру") {
+                checkNow()
+            }
+            .disabled(isChecking)
+            if let status {
+                Text(status)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
             Spacer()
         }
         .padding()

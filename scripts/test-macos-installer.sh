@@ -9,7 +9,7 @@ input_executable="$embedded/Contents/MacOS/QazaqType"
 version=$(
     /usr/libexec/PlistBuddy -c \
         "Print :CFBundleShortVersionString" \
-        "$project_dir/platforms/macos/GuideInstaller/Info.plist"
+        "$project_dir/platforms/macos/InputMethod/Info.plist"
 )
 
 QAZAQTYPE_ARCHS="x86_64 arm64" \

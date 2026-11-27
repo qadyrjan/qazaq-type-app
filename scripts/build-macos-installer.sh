@@ -10,10 +10,14 @@ executable_dir="$bundle_dir/Contents/MacOS"
 resources_dir="$bundle_dir/Contents/Resources"
 architecture_build_dir="$build_dir/InstallerArchitectureBuild"
 dist_dir="$project_dir/dist"
+input_method_plist="$macos_dir/InputMethod/Info.plist"
 version=$(
     /usr/libexec/PlistBuddy -c \
         "Print :CFBundleShortVersionString" \
-        "$source_dir/Info.plist"
+        "$input_method_plist"
+)
+build_number=$(
+    /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$input_method_plist"
 )
 output_name="QazaqType-$version-macOS-universal.dmg"
 output_dmg="$dist_dir/$output_name"
@@ -50,6 +54,10 @@ mkdir -p \
     "$architecture_build_dir" \
     "$dist_dir"
 cp "$source_dir/Info.plist" "$bundle_dir/Contents/Info.plist"
+/usr/libexec/PlistBuddy \
+    -c "Set :CFBundleShortVersionString $version" \
+    -c "Set :CFBundleVersion $build_number" \
+    "$bundle_dir/Contents/Info.plist"
 ditto "$build_dir/QazaqType.app" "$resources_dir/QazaqType.app"
 cp \
     "$build_dir/QazaqType.app/Contents/Resources/QazaqType.tiff" \
