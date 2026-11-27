@@ -1,3 +1,5 @@
+use crate::cyrillic::Word;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     Kazakh,
@@ -72,11 +74,17 @@ pub struct EngineState {
     pub composition: Option<String>,
     pub context_id: Option<u64>,
     pub(crate) pending_uppercase: bool,
+    /// Whether the pending Latin key was pressed at the start of a word.
+    pub(crate) pending_at_word_start: bool,
+    /// Whether the next printable key starts a new word.
+    pub(crate) at_word_start: bool,
+    /// The word being composed in Cyrillic mode.
+    pub(crate) word: Word,
 }
 
 impl EngineState {
     #[must_use]
-    pub const fn new(mode: InputMode) -> Self {
+    pub fn new(mode: InputMode) -> Self {
         Self {
             mode,
             pending_key: None,
@@ -84,7 +92,16 @@ impl EngineState {
             composition: None,
             context_id: None,
             pending_uppercase: false,
+            pending_at_word_start: false,
+            at_word_start: true,
+            word: Word::default(),
         }
+    }
+
+    /// Whether any composition (Latin pending key or Cyrillic word) is open.
+    #[must_use]
+    pub fn has_composition(&self) -> bool {
+        self.pending_key.is_some() || !self.word.is_empty()
     }
 
     pub(crate) fn clear_pending(&mut self) {
@@ -93,5 +110,7 @@ impl EngineState {
         self.composition = None;
         self.context_id = None;
         self.pending_uppercase = false;
+        self.pending_at_word_start = false;
+        self.word.clear();
     }
 }

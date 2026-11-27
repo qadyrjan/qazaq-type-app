@@ -19,7 +19,8 @@ final class QazaqInputController: IMKInputController {
         engine = qazaq_engine_new_with_config(
             runtimeConfig.enabled,
             runtimeConfig.defaultMode,
-            runtimeConfig.thresholdMilliseconds
+            runtimeConfig.thresholdMilliseconds,
+            runtimeConfig.layout
         )
         super.init(server: server, delegate: delegate, client: inputClient)
         preferencesObserver = DistributedNotificationCenter.default().addObserver(
@@ -66,6 +67,13 @@ final class QazaqInputController: IMKInputController {
         }
 
         guard let key = Self.printableKey(for: event) else {
+            // Keys the engine does not know (function keys, keypad) must not
+            // leave a word composed while the application inserts text.
+            let actions = qazaq_engine_handle_context(
+                engine,
+                UInt32(QAZAQ_CONTEXT_CURSOR_MOVED)
+            )
+            _ = apply(actions, sender: sender)
             return false
         }
 
@@ -84,6 +92,35 @@ final class QazaqInputController: IMKInputController {
             )
         }
         return apply(actions, sender: sender)
+    }
+
+    override func menu() -> NSMenu! {
+        let menu = NSMenu(title: "QazaqType")
+        let latin = NSMenuItem(
+            title: "Латын пернетақтасы (q → қ, aa → ә)",
+            action: #selector(selectLatinLayout(_:)),
+            keyEquivalent: ""
+        )
+        latin.state = runtimeConfig.layout == QazaqPreferences.latinLayout ? .on : .off
+        let cyrillic = NSMenuItem(
+            title: "Орыс пернетақтасы — ЙЦУКЕН (аа → ә, ии → і)",
+            action: #selector(selectCyrillicLayout(_:)),
+            keyEquivalent: ""
+        )
+        cyrillic.state = runtimeConfig.layout == QazaqPreferences.cyrillicLayout ? .on : .off
+        menu.addItem(latin)
+        menu.addItem(cyrillic)
+        return menu
+    }
+
+    @objc func selectLatinLayout(_ sender: Any!) {
+        QazaqPreferences.saveLayout(QazaqPreferences.latinLayout)
+        reloadPreferences()
+    }
+
+    @objc func selectCyrillicLayout(_ sender: Any!) {
+        QazaqPreferences.saveLayout(QazaqPreferences.cyrillicLayout)
+        reloadPreferences()
     }
 
     override func composedString(_ sender: Any!) -> Any! {
@@ -211,7 +248,8 @@ final class QazaqInputController: IMKInputController {
             engine,
             runtimeConfig.enabled,
             runtimeConfig.defaultMode,
-            runtimeConfig.thresholdMilliseconds
+            runtimeConfig.thresholdMilliseconds,
+            runtimeConfig.layout
         )
         _ = apply(actions, sender: client())
     }
@@ -237,11 +275,18 @@ final class QazaqInputController: IMKInputController {
         }
     }
 
+    /// Physical ANSI key positions as unmodified US characters. The engine
+    /// maps them to Latin rules or to the Russian ЙЦУКЕН layout itself, so
+    /// the result never depends on the user's other installed layouts.
     private static let physicalKeys: [UInt16: String] = [
         0: "a", 11: "b", 8: "c", 2: "d", 14: "e", 3: "f", 5: "g",
         4: "h", 34: "i", 38: "j", 40: "k", 37: "l", 46: "m",
         45: "n", 31: "o", 35: "p", 12: "q", 15: "r", 1: "s",
         17: "t", 32: "u", 9: "v", 13: "w", 7: "x", 16: "y", 6: "z",
         43: ",", 47: ".", 44: "/",
+        18: "1", 19: "2", 20: "3", 21: "4", 23: "5",
+        22: "6", 26: "7", 28: "8", 25: "9", 29: "0",
+        27: "-", 24: "=", 33: "[", 30: "]", 42: "\\",
+        41: ";", 39: "'", 50: "`", 10: "`",
     ]
 }

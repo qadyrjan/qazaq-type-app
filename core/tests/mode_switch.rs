@@ -86,3 +86,30 @@ fn english_mode_forwards_non_q_keys_unchanged() {
         }
     }
 }
+
+#[test]
+fn fast_qq_inside_a_kazakh_word_is_double_q() {
+    let mut engine = engine();
+    let mut model = TextModel::default();
+    for (input, timestamp) in [("h", 0), ("a", 500), ("l", 1000), ("y", 1500)] {
+        enter(&mut engine, &mut model, input, timestamp);
+    }
+    enter(&mut engine, &mut model, "q", 2000);
+    enter(&mut engine, &mut model, "q", 2100);
+    enter(&mut engine, &mut model, "a", 2600);
+    expire(&mut engine, &mut model, 3100);
+    assert_eq!(model.committed, "халыққа");
+    assert_eq!(engine.state().mode, InputMode::Kazakh);
+}
+
+#[test]
+fn fast_qq_after_a_space_still_switches_mode() {
+    let mut engine = engine();
+    let mut model = TextModel::default();
+    enter(&mut engine, &mut model, "a", 0);
+    model.apply(&engine.handle_special_key(qazaqtype_core::SpecialKey::Space, CONTEXT));
+    enter(&mut engine, &mut model, "q", 1000);
+    enter(&mut engine, &mut model, "q", 1100);
+    assert_eq!(engine.state().mode, InputMode::English);
+    assert_eq!(model.committed, "а");
+}

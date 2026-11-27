@@ -20,6 +20,20 @@
   },
   "mode_toggle": "qq",
   "default_double_press_threshold_ms": 400,
-  "double_press_threshold_range_ms": [200, 800]
+  "double_press_threshold_range_ms": [200, 800],
+  "cyrillic": {
+    "base_layout": "Russian - PC",
+    "repeat": {
+      "а": ["а", "ә", "аа"],
+      "и": ["и", "і", "иі"],
+      "о": ["о", "ө", "оо"],
+      "н": ["н", "ң", "нн"],
+      "х": ["х", "һ", "хх"],
+      "у": ["у", "harmony:ұ|ү", "flip"],
+      "к": ["harmony:қ|к", "к", "harmony:ққ|кк", "кк"],
+      "г": ["harmony:ғ|г", "г", "harmony:ғғ|гг", "гг"]
+    },
+    "mode_toggle": "йй"
+  }
 }
 

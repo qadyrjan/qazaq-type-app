@@ -74,3 +74,21 @@ Still required:
 - mode notification presentation
 - author, website, and Instagram metadata
 - settings localization for Chinese and English
+
+## Phase 4 — Cyrillic (ЙЦУКЕН) keyboard
+
+Status: in progress
+
+Implemented:
+
+- Russian PC keyboard mapping in the shared core, including punctuation
+- double-press Kazakh letters, word composition, and harmony resolution of
+  қ/к, ғ/г, ұ/ү with a small word list for words without deciding vowels
+- keyboard choice in the settings app, installer, and input menu
+- Latin keyboard: a fast `qq` inside a word now gives `ққ` instead of
+  switching the mode
+
+Still required:
+
+- typing tests in real macOS applications
+- measuring harmony accuracy on a Kazakh text corpus

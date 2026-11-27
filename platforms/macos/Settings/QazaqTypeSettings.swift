@@ -18,6 +18,7 @@ private final class SettingsModel: ObservableObject {
     @Published var defaultMode: UInt32
     @Published var thresholdMilliseconds: UInt64
     @Published var showModeNotification: Bool
+    @Published var layout: UInt32
 
     init() {
         let config = QazaqPreferences.load()
@@ -25,6 +26,7 @@ private final class SettingsModel: ObservableObject {
         defaultMode = config.defaultMode
         thresholdMilliseconds = config.thresholdMilliseconds
         showModeNotification = config.showModeNotification
+        layout = config.layout
     }
 
     func save() {
@@ -33,7 +35,8 @@ private final class SettingsModel: ObservableObject {
                 enabled: enabled,
                 defaultMode: defaultMode,
                 thresholdMilliseconds: thresholdMilliseconds,
-                showModeNotification: showModeNotification
+                showModeNotification: showModeNotification,
+                layout: layout
             )
         )
     }
@@ -43,6 +46,7 @@ private final class SettingsModel: ObservableObject {
         defaultMode = 0
         thresholdMilliseconds = 400
         showModeNotification = true
+        layout = QazaqPreferences.latinLayout
         save()
     }
 }
@@ -54,7 +58,7 @@ private struct SettingsRootView: View {
         TabView {
             GeneralSettingsView(model: model)
                 .tabItem { Label("Жалпы", systemImage: "gearshape") }
-            InputRulesView()
+            InputRulesView(layout: model.layout)
                 .tabItem { Label("Ережелер", systemImage: "character.book.closed") }
             PrivacyView()
                 .tabItem { Label("Құпиялық", systemImage: "hand.raised") }
@@ -72,6 +76,13 @@ private struct GeneralSettingsView: View {
         Form {
             Toggle("Қазақша түрлендіруді қосу", isOn: $model.enabled)
                 .onChange(of: model.enabled) { _ in model.save() }
+
+            Picker("Пернетақта", selection: $model.layout) {
+                Text("Латын (q → қ)").tag(QazaqPreferences.latinLayout)
+                Text("Орысша ЙЦУКЕН (аа → ә)").tag(QazaqPreferences.cyrillicLayout)
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: model.layout) { _ in model.save() }
 
             Picker("Бастапқы режим", selection: $model.defaultMode) {
                 Text("KZ — Қазақша").tag(UInt32(0))
@@ -126,27 +137,45 @@ private struct GeneralSettingsView: View {
 }
 
 private struct InputRulesView: View {
-    private let pairs = [
+    let layout: UInt32
+
+    private let latinPairs = [
         ("aa", "ә"), ("ss", "ш"), ("cc", "ч"), ("zz", "ж"),
         ("nn", "ң"), ("oo", "ө"), ("uu", "ү"), ("yy", "і"),
         ("gg", "ғ"), ("ee", "э"), (",,", "я"), ("..", "ю"),
         ("//", "ь"),
     ]
 
+    private let cyrillicPairs = [
+        ("аа", "ә"), ("ии", "і"), ("оо", "ө"), ("нн", "ң"),
+        ("хх", "һ"), ("уу", "ұ / ү"), ("к", "қ / к"), ("г", "ғ / г"),
+        ("кк", "к"), ("гг", "г"), ("ккк", "ққ"), ("ннн", "нн"),
+        ("иии", "иі"), ("ууу", "ұ ⇄ ү"),
+    ]
+
+    private var isCyrillic: Bool {
+        layout == QazaqPreferences.cyrillicLayout
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Қос басу ережелері")
                 .font(.title2.bold())
-            Text("Екі бірдей пернені белгіленген уақыт ішінде басыңыз.")
-                .foregroundColor(.secondary)
+            Text(
+                isCyrillic
+                    ? "Орыс әріптері өз орнында. Қазақ әрпі үшін орнына жазып жүрген әріпті екі рет басыңыз. Сөз бос орын басқанда бекітіледі, ал қ, ғ, ұ, ү сөздің дауыстыларына қарап өзі таңдалады."
+                    : "Екі бірдей пернені белгіленген уақыт ішінде басыңыз."
+            )
+            .foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
             ScrollView {
                 LazyVGrid(
                     columns: [
-                        GridItem(.adaptive(minimum: 110), spacing: 10)
+                        GridItem(.adaptive(minimum: 120), spacing: 10)
                     ],
                     spacing: 10
                 ) {
-                    ForEach(pairs, id: \.0) { pair in
+                    ForEach(isCyrillic ? cyrillicPairs : latinPairs, id: \.0) { pair in
                         HStack {
                             Text(pair.0).font(.system(.body, design: .monospaced))
                             Spacer()
@@ -160,8 +189,12 @@ private struct InputRulesView: View {
                     }
                 }
             }
-            Text("qq — KZ және EN режимдерін ауыстырады")
-                .font(.headline)
+            Text(
+                isCyrillic
+                    ? "йй (латынша qq) — KZ және EN режимдерін ауыстырады"
+                    : "qq — сөз басында KZ және EN режимдерін ауыстырады"
+            )
+            .font(.headline)
         }
         .padding()
     }

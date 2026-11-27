@@ -1,7 +1,7 @@
 mod common;
 
 use common::{TextModel, engine, enter, expire, key};
-use qazaqtype_core::{EngineAction, EngineConfig, InputMode};
+use qazaqtype_core::{EngineAction, EngineConfig, InputMode, KeyboardLayout};
 
 #[test]
 fn qazaq_example_converts_as_documented() {
@@ -61,6 +61,7 @@ fn disabled_engine_forwards_everything() {
         enabled: false,
         default_mode: InputMode::Kazakh,
         double_press_threshold_ms: 400,
+        layout: KeyboardLayout::Latin,
     };
     let mut engine = qazaqtype_core::Engine::new(config).unwrap();
     assert_eq!(

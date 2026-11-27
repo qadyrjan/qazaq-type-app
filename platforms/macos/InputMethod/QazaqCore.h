@@ -32,6 +32,11 @@ enum {
 };
 
 enum {
+    QAZAQ_LAYOUT_LATIN = 0,
+    QAZAQ_LAYOUT_CYRILLIC = 1,
+};
+
+enum {
     QAZAQ_SPECIAL_SPACE = 1,
     QAZAQ_SPECIAL_ENTER = 2,
     QAZAQ_SPECIAL_TAB = 3,
@@ -57,7 +62,8 @@ QazaqEngine *qazaq_engine_new(void);
 QazaqEngine *qazaq_engine_new_with_config(
     bool enabled,
     uint32_t default_mode,
-    uint64_t threshold_ms
+    uint64_t threshold_ms,
+    uint32_t layout
 );
 void qazaq_engine_free(QazaqEngine *engine);
 
@@ -93,7 +99,8 @@ QazaqActionList qazaq_engine_update_config(
     QazaqEngine *engine,
     bool enabled,
     uint32_t default_mode,
-    uint64_t threshold_ms
+    uint64_t threshold_ms,
+    uint32_t layout
 );
 void qazaq_action_list_free(QazaqActionList list);
 

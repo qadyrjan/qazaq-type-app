@@ -3,11 +3,23 @@ use crate::InputMode;
 pub const MIN_DOUBLE_PRESS_THRESHOLD_MS: u64 = 200;
 pub const MAX_DOUBLE_PRESS_THRESHOLD_MS: u64 = 800;
 
+/// The keyboard the user types Kazakh on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum KeyboardLayout {
+    /// Latin letters convert to Kazakh Cyrillic (`q` → `қ`, `aa` → `ә`).
+    #[default]
+    Latin,
+    /// Russian ЙЦУКЕН letters stay in place; Kazakh letters are typed by
+    /// pressing their Russian substitute twice (`аа` → `ә`, `ии` → `і`).
+    Cyrillic,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EngineConfig {
     pub enabled: bool,
     pub default_mode: InputMode,
     pub double_press_threshold_ms: u64,
+    pub layout: KeyboardLayout,
 }
 
 impl Default for EngineConfig {
@@ -16,6 +28,7 @@ impl Default for EngineConfig {
             enabled: true,
             default_mode: InputMode::Kazakh,
             double_press_threshold_ms: 400,
+            layout: KeyboardLayout::Latin,
         }
     }
 }

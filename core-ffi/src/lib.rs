@@ -4,7 +4,8 @@ use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 
 use qazaqtype_core::{
-    ContextEvent, Engine, EngineAction, EngineConfig, InputMode, KeyEvent, SpecialKey,
+    ContextEvent, Engine, EngineAction, EngineConfig, InputMode, KeyEvent, KeyboardLayout,
+    SpecialKey,
 };
 
 pub const ACTION_SET_COMPOSITION: u32 = 1;
@@ -13,6 +14,9 @@ pub const ACTION_COMMIT_TEXT: u32 = 3;
 pub const ACTION_CLEAR_COMPOSITION: u32 = 4;
 pub const ACTION_SWITCH_MODE: u32 = 5;
 pub const ACTION_FORWARD_KEY: u32 = 6;
+
+pub const LAYOUT_LATIN: u32 = 0;
+pub const LAYOUT_CYRILLIC: u32 = 1;
 
 #[repr(C)]
 pub struct QazaqAction {
@@ -39,20 +43,25 @@ impl QazaqActionList {
 /// Creates a default KZ-mode engine.
 #[unsafe(no_mangle)]
 pub extern "C" fn qazaq_engine_new() -> *mut Engine {
-    qazaq_engine_new_with_config(true, 0, 400)
+    qazaq_engine_new_with_config(true, 0, 400, LAYOUT_LATIN)
 }
 
 /// Creates an engine from platform-owned settings.
+///
+/// `layout` is [`LAYOUT_LATIN`] or [`LAYOUT_CYRILLIC`]; unknown values fall
+/// back to Latin.
 #[unsafe(no_mangle)]
 pub extern "C" fn qazaq_engine_new_with_config(
     enabled: bool,
     default_mode: u32,
     threshold_ms: u64,
+    layout: u32,
 ) -> *mut Engine {
     let config = EngineConfig {
         enabled,
         default_mode: decode_mode(default_mode),
         double_press_threshold_ms: threshold_ms,
+        layout: decode_layout(layout),
     };
     match Engine::new(config) {
         Ok(engine) => Box::into_raw(Box::new(engine)),
@@ -200,6 +209,7 @@ pub unsafe extern "C" fn qazaq_engine_update_config(
     enabled: bool,
     default_mode: u32,
     threshold_ms: u64,
+    layout: u32,
 ) -> QazaqActionList {
     if engine.is_null() {
         return QazaqActionList::empty();
@@ -208,6 +218,7 @@ pub unsafe extern "C" fn qazaq_engine_update_config(
         enabled,
         default_mode: decode_mode(default_mode),
         double_press_threshold_ms: threshold_ms,
+        layout: decode_layout(layout),
     };
     // SAFETY: Required by this function's pointer contract.
     let engine = unsafe { &mut *engine };
@@ -310,5 +321,13 @@ const fn decode_mode(value: u32) -> InputMode {
         InputMode::English
     } else {
         InputMode::Kazakh
+    }
+}
+
+const fn decode_layout(value: u32) -> KeyboardLayout {
+    if value == LAYOUT_CYRILLIC {
+        KeyboardLayout::Cyrillic
+    } else {
+        KeyboardLayout::Latin
     }
 }

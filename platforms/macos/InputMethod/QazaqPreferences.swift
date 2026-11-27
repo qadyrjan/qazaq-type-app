@@ -5,6 +5,8 @@ struct QazaqRuntimeConfig {
     let defaultMode: UInt32
     let thresholdMilliseconds: UInt64
     let showModeNotification: Bool
+    /// `QazaqPreferences.latinLayout` or `QazaqPreferences.cyrillicLayout`.
+    let layout: UInt32
 }
 
 enum QazaqPreferences {
@@ -13,11 +15,22 @@ enum QazaqPreferences {
         "kz.qazaqtype.settings.changed"
     )
 
+    /// Latin keys convert to Kazakh (`q` → `қ`, `aa` → `ә`).
+    static let latinLayout: UInt32 = 0
+    /// Russian ЙЦУКЕН keyboard; Kazakh letters by double press (`аа` → `ә`).
+    static let cyrillicLayout: UInt32 = 1
+
     private enum Key {
         static let enabled = "enabled"
         static let defaultMode = "defaultMode"
         static let thresholdMilliseconds = "doublePressThresholdMilliseconds"
         static let showModeNotification = "showModeNotification"
+        static let layout = "keyboardLayout"
+    }
+
+    private enum LayoutValue {
+        static let latin = "latin"
+        static let cyrillic = "cyrillic"
     }
 
     static func load() -> QazaqRuntimeConfig {
@@ -34,12 +47,14 @@ enum QazaqPreferences {
         let showNotification = defaults.object(
             forKey: Key.showModeNotification
         ) as? Bool ?? true
+        let layout = defaults.object(forKey: Key.layout) as? String
 
         return QazaqRuntimeConfig(
             enabled: enabled,
             defaultMode: mode == "EN" ? 1 : 0,
             thresholdMilliseconds: UInt64(threshold),
-            showModeNotification: showNotification
+            showModeNotification: showNotification,
+            layout: layout == LayoutValue.cyrillic ? cyrillicLayout : latinLayout
         )
     }
 
@@ -57,6 +72,24 @@ enum QazaqPreferences {
             config.showModeNotification,
             forKey: Key.showModeNotification
         )
+        defaults.set(layoutValue(config.layout), forKey: Key.layout)
+        postChanged()
+    }
+
+    /// Changes only the keyboard layout, keeping every other setting.
+    static func saveLayout(_ layout: UInt32) {
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return
+        }
+        defaults.set(layoutValue(layout), forKey: Key.layout)
+        postChanged()
+    }
+
+    private static func layoutValue(_ layout: UInt32) -> String {
+        layout == cyrillicLayout ? LayoutValue.cyrillic : LayoutValue.latin
+    }
+
+    private static func postChanged() {
         DistributedNotificationCenter.default().postNotificationName(
             changedNotification,
             object: nil,
@@ -69,7 +102,7 @@ enum QazaqPreferences {
         enabled: true,
         defaultMode: 0,
         thresholdMilliseconds: 400,
-        showModeNotification: true
+        showModeNotification: true,
+        layout: latinLayout
     )
 }
-

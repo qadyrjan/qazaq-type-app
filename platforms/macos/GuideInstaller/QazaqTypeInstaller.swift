@@ -529,6 +529,7 @@ private struct GuideStep: View {
 private struct InstallerRootView: View {
     @ObservedObject var model: InstallerModel
     @State private var testText = ""
+    @State private var layout = QazaqPreferences.load().layout
 
     private var currentStep: Int {
         if model.isEnabled {
@@ -647,10 +648,27 @@ private struct InstallerRootView: View {
 
             if model.isEnabled {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Жылдам тексеру")
-                        .font(.headline)
-                    Text("Мәзір жолағынан QazaqType-ты таңдап, qazaq деп теріңіз")
-                        .foregroundColor(.secondary)
+                    HStack {
+                        Text("Жылдам тексеру")
+                            .font(.headline)
+                        Spacer()
+                        Picker("Пернетақта", selection: $layout) {
+                            Text("Латын").tag(QazaqPreferences.latinLayout)
+                            Text("Орысша ЙЦУКЕН").tag(QazaqPreferences.cyrillicLayout)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 240)
+                        .onChange(of: layout) { value in
+                            QazaqPreferences.saveLayout(value)
+                        }
+                    }
+                    Text(
+                        layout == QazaqPreferences.cyrillicLayout
+                            ? "Мәзір жолағынан QazaqType-ты таңдап, Казакстан деп теріңіз"
+                            : "Мәзір жолағынан QazaqType-ты таңдап, qazaq деп теріңіз"
+                    )
+                    .foregroundColor(.secondary)
                     TextField("Осы жерде тексеріңіз", text: $testText)
                         .textFieldStyle(.roundedBorder)
                 }
