@@ -32,7 +32,17 @@ codesign --verify --verbose=2 "$dmg"
 xcrun notarytool submit "$dmg" \
     --keychain-profile "$profile" \
     --wait
-xcrun stapler staple "$dmg"
+# Apple's ticket can take a little while to become available after
+# acceptance, so retry stapling before giving up.
+attempt=1
+until xcrun stapler staple "$dmg"; do
+    if [ "$attempt" -ge 6 ]; then
+        echo "Stapling failed after $attempt attempts." >&2
+        exit 1
+    fi
+    attempt=$((attempt + 1))
+    sleep 20
+done
 xcrun stapler validate "$dmg"
 spctl --assess --type open --context context:primary-signature \
     --verbose=4 "$dmg"

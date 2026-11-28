@@ -60,7 +60,7 @@ enum QazaqText {
     case menuLatin, menuCyrillic, menuSettings
     // Installer
     case iWindowTitle
-    case iOpenPrivacy
+    case iMenuQuit, iMenuEdit, iMenuUndo, iMenuCut, iMenuCopy, iMenuPaste, iMenuSelectAll
     case iWelcomeDetail
     case iBtnReinstall
     case iBtnInstall
@@ -742,10 +742,46 @@ private let qazaqStrings: [QazaqText: [QazaqLanguage: String]] = [
         .chinese: "QazaqType 安装程序",
         .russian: "Установщик QazaqType",
     ],
-    .iOpenPrivacy: [
-        .kazakh: "Құпиялық және қауіпсіздік баптауларын ашу",
-        .english: "Open Privacy & Security",
-        .chinese: "打开“隐私与安全性”设置",
-        .russian: "Открыть «Конфиденциальность и безопасность»",
+    .iMenuQuit: [
+        .kazakh: "QazaqType орнатқышынан шығу",
+        .english: "Quit QazaqType Installer",
+        .chinese: "退出 QazaqType 安装程序",
+        .russian: "Завершить установщик QazaqType",
+    ],
+    .iMenuEdit: [
+        .kazakh: "Өңдеу",
+        .english: "Edit",
+        .chinese: "编辑",
+        .russian: "Правка",
+    ],
+    .iMenuUndo: [
+        .kazakh: "Болдырмау",
+        .english: "Undo",
+        .chinese: "撤销",
+        .russian: "Отменить",
+    ],
+    .iMenuCut: [
+        .kazakh: "Қиып алу",
+        .english: "Cut",
+        .chinese: "剪切",
+        .russian: "Вырезать",
+    ],
+    .iMenuCopy: [
+        .kazakh: "Көшіру",
+        .english: "Copy",
+        .chinese: "拷贝",
+        .russian: "Скопировать",
+    ],
+    .iMenuPaste: [
+        .kazakh: "Қою",
+        .english: "Paste",
+        .chinese: "粘贴",
+        .russian: "Вставить",
+    ],
+    .iMenuSelectAll: [
+        .kazakh: "Барлығын таңдау",
+        .english: "Select All",
+        .chinese: "全选",
+        .russian: "Выбрать все",
     ],
 ]

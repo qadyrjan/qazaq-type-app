@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import Combine
 import SwiftUI
 
 private enum InstallerConstants {
@@ -373,23 +374,6 @@ private final class InstallerModel: ObservableObject {
         // Input methods started by the system are not always listed above.
         _ = runTool("/usr/bin/pkill", ["-9", "-f", "/Input Methods/QazaqType.app/Contents/"])
         Thread.sleep(forTimeInterval: 0.3)
-    }
-
-    /// macOS may ask to approve or unblock the input method there.
-    var showsPrivacySettings: Bool {
-        stage == .needsActivation || stage == .needsLoginRefresh || stage == .failed
-    }
-
-    func openPrivacySettings() {
-        let value: String
-        if #available(macOS 13, *) {
-            value = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"
-        } else {
-            value = "x-apple.systempreferences:com.apple.preference.security"
-        }
-        if let url = URL(string: value) {
-            NSWorkspace.shared.open(url)
-        }
     }
 
     func openKeyboardSettings() {
@@ -822,7 +806,9 @@ private struct InstallerRootView: View {
     }
 
     private func updateWindowTitle() {
-        NSApp.windows.first?.title = L(.iWindowTitle)
+        for window in NSApp.windows where window.contentView is NSHostingView<InstallerRootView> {
+            window.title = L(.iWindowTitle)
+        }
     }
 
     private var sidebar: some View {
@@ -959,15 +945,8 @@ private struct InstallerRootView: View {
             Spacer()
 
             HStack {
-                VStack(alignment: .leading, spacing: 8) {
-                    if model.showsPrivacySettings {
-                        Button(L(.iOpenPrivacy)) {
-                            model.openPrivacySettings()
-                        }
-                    }
-                    Button(L(.iOpenKeyboard)) {
-                        model.openKeyboardSettings()
-                    }
+                Button(L(.iOpenKeyboard)) {
+                    model.openKeyboardSettings()
                 }
                 Spacer()
                 if model.stage == .installing {
@@ -986,16 +965,103 @@ private struct InstallerRootView: View {
 }
 
 @main
-private struct QazaqTypeInstallerApp: App {
-    @StateObject private var model = InstallerModel()
+private enum QazaqTypeInstallerMain {
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = InstallerAppDelegate()
+        application.delegate = delegate
+        application.setActivationPolicy(.regular)
+        withExtendedLifetime(delegate) {
+            application.run()
+        }
+    }
+}
 
-    var body: some Scene {
-        WindowGroup {
-            InstallerRootView(model: model)
+/// Creates the installer window itself and always brings it to the front.
+/// A SwiftUI `WindowGroup` sometimes left the app running with no visible
+/// window on first launch, right after the macOS download check.
+private final class InstallerAppDelegate: NSObject, NSApplicationDelegate {
+    private let model = InstallerModel()
+    private var window: NSWindow?
+    private var languageObservation: AnyCancellable?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        languageObservation = model.$language.sink { [weak self] _ in
+            // Read the new value after it is stored.
+            DispatchQueue.main.async {
+                NSApp.mainMenu = self?.makeMainMenu()
+            }
         }
-        .windowStyle(.titleBar)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
+        showWindow()
+        // The download confirmation can still hold focus for a moment.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.showWindow()
         }
+    }
+
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        showWindow()
+        return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(
+        _ sender: NSApplication
+    ) -> Bool {
+        true
+    }
+
+    private func showWindow() {
+        if window == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 780, height: 520),
+                styleMask: [.titled, .closable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.isReleasedWhenClosed = false
+            window.isRestorable = false
+            window.title = L(.iWindowTitle)
+            window.contentView = NSHostingView(
+                rootView: InstallerRootView(model: model)
+            )
+            window.center()
+            self.window = window
+        }
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func makeMainMenu() -> NSMenu {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(
+            withTitle: L(.iMenuQuit),
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        )
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+
+        // Lets Copy and Paste work in the quick-test text field.
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: L(.iMenuEdit))
+        editMenu.addItem(withTitle: L(.iMenuUndo), action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: L(.iMenuCut), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: L(.iMenuCopy), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: L(.iMenuPaste), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(
+            withTitle: L(.iMenuSelectAll),
+            action: #selector(NSText.selectAll(_:)),
+            keyEquivalent: "a"
+        )
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+        return mainMenu
     }
 }

@@ -51,6 +51,8 @@ else
 fi
 
 cd "$project_dir"
+# Start from an empty bundle so removed resources do not linger.
+rm -rf "$bundle_dir"
 mkdir -p \
     "$executable_dir" \
     "$resources_dir" \
@@ -155,7 +157,6 @@ done
 cp "$settings_source_dir/Info.plist" "$settings_dir/Contents/Info.plist"
 stamp_version "$settings_dir/Contents/Info.plist"
 cp "$resources_dir/QazaqType.tiff" "$settings_dir/Contents/Resources/QazaqType.tiff"
-ditto "$settings_source_dir/Resources" "$settings_dir/Contents/Resources"
 printf %s 'APPL????' >"$settings_dir/Contents/PkgInfo"
 set -- $settings_binaries
 if [ "$#" -eq 1 ]; then

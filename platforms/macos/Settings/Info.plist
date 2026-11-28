@@ -14,13 +14,6 @@
 	<string>kz.qazaqtype.settings</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
-	<key>CFBundleLocalizations</key>
-	<array>
-		<string>kk</string>
-		<string>en</string>
-		<string>zh-Hans</string>
-		<string>ru</string>
-	</array>
 	<key>CFBundleName</key>
 	<string>QazaqType Settings</string>
 	<key>CFBundlePackageType</key>
