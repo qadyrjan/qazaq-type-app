@@ -34,8 +34,10 @@ private final class InstallerModel: ObservableObject {
     @Published private(set) var installedVersion: String?
     @Published private(set) var embeddedVersion: String?
     private var isUpdating = false
-    @Published private(set) var detail =
-        "Орнату алдында жұмысыңызды сақтаңыз. Алғашқы орнатудан кейін macOS жүйеден шығып, қайта кіруді сұрауы мүмкін."
+    @Published private(set) var detail: InstallerLine = .text(.iWelcomeDetail)
+    @Published var language = QazaqPreferences.loadLanguage() {
+        didSet { QazaqPreferences.saveLanguage(language) }
+    }
 
     private let fileManager = FileManager.default
 
@@ -47,21 +49,21 @@ private final class InstallerModel: ObservableObject {
         switch stage {
         case .welcome:
             if hasLegacySystemInstallation {
-                return "Жаңарту"
+                return L(.updateNow)
             }
-            return isInstalled ? "Қайта орнату" : "Орнату"
+            return isInstalled ? L(.iBtnReinstall) : L(.iBtnInstall)
         case .installing:
-            return "Орнатылуда…"
+            return L(.iBtnInstalling)
         case .needsLoginRefresh:
-            return "Қайта орнату"
+            return L(.iBtnReinstall)
         case .needsActivation:
-            return "QazaqType-ты қосу"
+            return L(.iBtnEnable)
         case .updateAvailable:
-            return "Жаңарту"
+            return L(.updateNow)
         case .ready:
-            return "Қайта тексеру"
+            return L(.iBtnRecheck)
         case .failed:
-            return "Қайталау"
+            return L(.iBtnRetry)
         }
     }
 
@@ -72,38 +74,38 @@ private final class InstallerModel: ObservableObject {
     var stageTitle: String {
         switch stage {
         case .welcome:
-            return "QazaqType-қа қош келдіңіз"
+            return L(.iTitleWelcome)
         case .installing:
-            return "Енгізу әдісі орнатылуда"
+            return L(.iTitleInstalling)
         case .needsLoginRefresh:
-            return "Жүйеге қайта кіру қажет"
+            return L(.iTitleNeedsLogin)
         case .needsActivation:
-            return "Енгізу әдісін қосу"
+            return L(.iTitleNeedsActivation)
         case .updateAvailable:
-            return "Жаңа нұсқа қолжетімді"
+            return L(.iTitleUpdate)
         case .ready:
-            return "QazaqType пайдалануға дайын"
+            return L(.iTitleReady)
         case .failed:
-            return "Орнату аяқталмады"
+            return L(.iTitleFailed)
         }
     }
 
     var stageDescription: String {
         switch stage {
         case .welcome:
-            return "Intel және Apple чипті Mac компьютерлеріне арналған дербес қазақша енгізу әдісі."
+            return L(.iDescWelcome)
         case .installing:
-            return "QazaqType көшіріліп, тіркеліп және macOS жүйесінде қосылуда."
+            return L(.iDescInstalling)
         case .needsLoginRefresh:
-            return "macOS QazaqType-ты енгізу әдістері тізіміне әлі қоспады. Алдымен «Қайта орнату» түймесін басыңыз. Көмектеспесе, жүйеден шығып, қайта кіріңіз де, орнатқышты қайта ашыңыз."
+            return L(.iDescNeedsLogin)
         case .needsActivation:
-            return "macOS растау сұрағын көрсетсе, «Рұқсат ету» түймесін басыңыз немесе пернетақта баптауларынан қолмен қосыңыз."
+            return L(.iDescNeedsActivation)
         case .updateAvailable:
-            return "Орнатылған нұсқа: \(installedVersion ?? "—"). Жаңа нұсқа: \(embeddedVersion ?? "—"). Баптауларыңыз сақталады, жүйеден шығудың қажеті жоқ."
+            return L(.iDescUpdate, installedVersion ?? "—", embeddedVersion ?? "—")
         case .ready:
-            return "Енді мәзір жолағынан QazaqType-ты таңдауға болады."
+            return L(.iDescReady)
         case .failed:
-            return "Төмендегі қатені тексеріп, түзеткеннен кейін қайталаңыз."
+            return L(.iDescFailed)
         }
     }
 
@@ -125,23 +127,26 @@ private final class InstallerModel: ObservableObject {
     func install() {
         isUpdating = stage == .updateAvailable
         stage = .installing
-        detail = isUpdating ? "QazaqType жаңартылуда…" : "QazaqType дайындалуда…"
+        detail = .text(isUpdating ? .iUpdating : .iPreparing)
 
         // File work runs off the main thread so the window stays responsive.
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let sourceURL = try self.embeddedInputMethodURL()
-                self.setDetail("Ескі нұсқалар тоқтатылып, тазалануда…")
+                self.setDetail(.text(.iCleaning))
                 self.stopRunningInputMethod()
                 try self.removeOldCopies()
-                self.setDetail("Жаңа нұсқа көшірілуде…")
+                self.setDetail(.text(.iCopying))
                 let destinationURL = try self.copyInputMethod(from: sourceURL)
                 DispatchQueue.main.async {
                     self.register(destinationURL)
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self.fail(error.localizedDescription)
+                    self.fail(
+                        (error as? InstallerError)?.line
+                            ?? .raw(error.localizedDescription)
+                    )
                 }
             }
         }
@@ -151,13 +156,13 @@ private final class InstallerModel: ObservableObject {
         LSRegisterURL(destinationURL as CFURL, true)
         let registerStatus = TISRegisterInputSource(destinationURL as CFURL)
         guard registerStatus == noErr else {
-            fail("Енгізу әдісін тіркеу сәтсіз аяқталды. Қате коды: \(registerStatus)")
+            fail(.text(.iErrRegister, String(registerStatus)))
             return
         }
         disableLegacyInputSources()
 
         isInstalled = true
-        detail = "QazaqType көшіріліп, тіркелді. macOS енгізу көздерін жаңартуда…"
+        detail = .text(.iRegistered)
         waitForRegistration(of: destinationURL, attempt: 0)
     }
 
@@ -177,8 +182,7 @@ private final class InstallerModel: ObservableObject {
         guard attempt < 24 else {
             refreshState()
             stage = .needsLoginRefresh
-            detail =
-                "Файл дұрыс орнатылды, бірақ ағымдағы сеанс жаңа енгізу режимін әлі жүктемеді."
+            detail = .text(.iNotLoaded)
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -190,15 +194,15 @@ private final class InstallerModel: ObservableObject {
         refreshState()
         guard let source = mainInputSource() ?? inputMode() else {
             stage = .needsLoginRefresh
-            detail = "Ағымдағы сеанс QazaqType енгізу режимін әлі таппады."
+            detail = .text(.iNotFound)
             return
         }
 
         stage = .installing
-        detail = "macOS жүйесінен QazaqType-ты қосу сұралуда…"
+        detail = .text(.iEnabling)
         let enableStatus = TISEnableInputSource(source)
         guard enableStatus == noErr else {
-            fail("Енгізу әдісін қосу сәтсіз аяқталды. Қате коды: \(enableStatus)")
+            fail(.text(.iErrEnable, String(enableStatus)))
             return
         }
         waitForActivation(attempt: 0)
@@ -218,8 +222,7 @@ private final class InstallerModel: ObservableObject {
                     return
                 }
                 self.stage = .needsActivation
-                self.detail =
-                    "macOS әлі растаған жоқ. Жүйелік сұрауда «Рұқсат ету» пәрменін таңдап, қайта көріңіз."
+                self.detail = .text(.iNotConfirmed)
                 return
             }
 
@@ -228,17 +231,16 @@ private final class InstallerModel: ObservableObject {
             self.stage = .ready
             if self.isUpdating {
                 self.isUpdating = false
-                self.detail = "QazaqType \(self.installedVersion ?? "") нұсқасына жаңартылды."
+                self.detail = .text(.iUpdated, self.installedVersion ?? "")
             } else if selectStatus == noErr {
-                self.detail = "Орнату, қосу және ауыстыру сәтті аяқталды."
+                self.detail = .text(.iAllDone)
             } else {
-                self.detail =
-                    "QazaqType қосылды. Оны мәзір жолағындағы енгізу әдістерінен таңдаңыз."
+                self.detail = .text(.iEnabledChoose)
             }
         }
     }
 
-    private func setDetail(_ value: String) {
+    private func setDetail(_ value: InstallerLine) {
         DispatchQueue.main.async {
             self.detail = value
         }
@@ -262,8 +264,7 @@ private final class InstallerModel: ObservableObject {
             isSelected = false
             if canRefreshStage {
                 stage = .welcome
-                detail =
-                    "Ескі жүйелік нұсқа табылды. Жаңарту кезінде macOS әкімші рұқсатын сұрайды."
+                detail = .text(.iLegacyFound)
             }
             return
         }
@@ -288,12 +289,12 @@ private final class InstallerModel: ObservableObject {
             if canRefreshStage {
                 if isOutdated {
                     stage = .updateAvailable
-                    detail = "Жаңарту ескі нұсқаны толық алмастырады. Пернетақта таңдауыңыз бен басқа баптаулар өзгермейді."
+                    detail = .text(.iReplaces)
                 } else if hasUserInstallation && isQuarantined(userInputMethodURL) {
                     // Copied by an older installer with the download flag,
                     // which keeps macOS from loading the input method.
                     stage = .welcome
-                    detail = "Орнатылған көшірмені macOS бұғаттап тұр. «Қайта орнату» түймесін басыңыз."
+                    detail = .text(.iQuarantined)
                 } else {
                     stage = isInstalled ? .needsLoginRefresh : .welcome
                 }
@@ -318,7 +319,7 @@ private final class InstallerModel: ObservableObject {
         if canRefreshStage {
             if isOutdated {
                 stage = .updateAvailable
-                detail = "Жаңарту ескі нұсқаны толық алмастырады. Пернетақта таңдауыңыз бен басқа баптаулар өзгермейді."
+                detail = .text(.iReplaces)
             } else {
                 stage = isEnabled ? .ready : .needsActivation
             }
@@ -403,7 +404,7 @@ private final class InstallerModel: ObservableObject {
 
     private func embeddedInputMethodURL() throws -> URL {
         guard let resourcesURL = Bundle.main.resourceURL else {
-            throw InstallerError.message("Орнатқыштың ресурстар қалтасы жоқ.")
+            throw InstallerError.line(.text(.iErrNoResources))
         }
         let url = resourcesURL.appendingPathComponent(
             "QazaqType.app",
@@ -412,9 +413,7 @@ private final class InstallerModel: ObservableObject {
         guard bundleIdentifier(at: url)
             == InstallerConstants.inputMethodBundleIdentifier
         else {
-            throw InstallerError.message(
-                "Орнатқыштағы QazaqType.app толық емес немесе сәйкестендіргіші қате."
-            )
+            throw InstallerError.line(.text(.iErrBadEmbedded))
         }
         return url
     }
@@ -448,12 +447,12 @@ private final class InstallerModel: ObservableObject {
         }
 
         if !needsAdministrator.isEmpty {
-            setDetail("Ескі жүйелік нұсқаны жою үшін әкімші рұқсаты сұралуда…")
+            setDetail(.text(.iAdmin))
             let command = "/bin/rm -rf "
                 + needsAdministrator.map { shellQuoted($0.path) }.joined(separator: " ")
             try runAsAdministrator(command)
             if needsAdministrator.contains(where: { fileManager.fileExists(atPath: $0.path) }) {
-                throw InstallerError.message("Ескі нұсқаны жою мүмкін болмады. Қайталап көріңіз.")
+                throw InstallerError.line(.text(.iErrRemove))
             }
         }
 
@@ -493,9 +492,7 @@ private final class InstallerModel: ObservableObject {
             withIntermediateDirectories: true
         )
         if fileManager.fileExists(atPath: destinationURL.path) {
-            throw InstallerError.message(
-                "Орнату орнында аттас басқа қолданба бар. Оны қорғау үшін орнату тоқтатылды."
-            )
+            throw InstallerError.line(.text(.iErrNameTaken))
         }
 
         // `--noqtn` drops the download quarantine flag: macOS does not load a
@@ -505,7 +502,7 @@ private final class InstallerModel: ObservableObject {
             ["--noqtn", sourceURL.path, destinationURL.path]
         )
         guard copyStatus == 0 else {
-            throw InstallerError.message("Енгізу әдісін көшіру мүмкін болмады: \(copyOutput)")
+            throw InstallerError.line(.text(.iErrCopy, copyOutput))
         }
         _ = runTool("/usr/bin/xattr", ["-dr", "com.apple.quarantine", destinationURL.path])
 
@@ -514,7 +511,7 @@ private final class InstallerModel: ObservableObject {
             ["--verify", "--deep", "--strict", destinationURL.path]
         )
         guard verifyStatus == 0 else {
-            throw InstallerError.message("Көшірілген енгізу әдісінің қолтаңбасы жарамсыз: \(verifyOutput)")
+            throw InstallerError.line(.text(.iErrSignature, verifyOutput))
         }
 
         // The input source server watches the folder's modification date.
@@ -558,8 +555,8 @@ private final class InstallerModel: ObservableObject {
             + "\" with administrator privileges"
         let (status, output) = runTool("/usr/bin/osascript", ["-e", script])
         guard status == 0 else {
-            throw InstallerError.message(
-                output.contains("-128") ? "Әкімші рұқсаты берілмеді." : output
+            throw InstallerError.line(
+                output.contains("-128") ? .text(.iErrAdminDenied) : .raw(output)
             )
         }
     }
@@ -665,7 +662,7 @@ private final class InstallerModel: ObservableObject {
                 == InstallerConstants.legacyInputMethodBundleIdentifier
     }
 
-    private func fail(_ message: String) {
+    private func fail(_ message: InstallerLine) {
         stage = .failed
         detail = message
         refreshInstallationFlagsOnly()
@@ -679,14 +676,39 @@ private final class InstallerModel: ObservableObject {
     }
 }
 
-private enum InstallerError: LocalizedError {
-    case message(String)
+/// A message kept as a translation key, so it follows language changes.
+private struct InstallerLine: Equatable {
+    let key: QazaqText?
+    let arguments: [String]
+    let raw: String?
 
-    var errorDescription: String? {
+    static func text(_ key: QazaqText, _ arguments: String...) -> Self {
+        Self(key: key, arguments: arguments, raw: nil)
+    }
+
+    static func raw(_ value: String) -> Self {
+        Self(key: nil, arguments: [], raw: value)
+    }
+
+    var string: String {
+        if let raw { return raw }
+        guard let key else { return "" }
+        return L(key, arguments: arguments)
+    }
+}
+
+private enum InstallerError: LocalizedError {
+    case line(InstallerLine)
+
+    var line: InstallerLine {
         switch self {
-        case let .message(value):
+        case let .line(value):
             return value
         }
+    }
+
+    var errorDescription: String? {
+        line.string
     }
 }
 
@@ -777,6 +799,13 @@ private struct InstallerRootView: View {
         }
         .frame(width: 780, height: 520)
         .background(Color(nsColor: .windowBackgroundColor))
+        .id(model.language)
+        .onAppear { updateWindowTitle() }
+        .onChange(of: model.language) { _ in updateWindowTitle() }
+    }
+
+    private func updateWindowTitle() {
+        NSApp.windows.first?.title = L(.iWindowTitle)
     }
 
     private var sidebar: some View {
@@ -788,7 +817,7 @@ private struct InstallerRootView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("QazaqType")
                         .font(.title2.bold())
-                    Text("macOS орнату шебері")
+                    Text(L(.iSubtitle))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -796,29 +825,37 @@ private struct InstallerRootView: View {
 
             GuideStep(
                 number: 1,
-                title: "Орнату",
-                subtitle: "Енгізу әдісін көшіру және тіркеу",
+                title: L(.iStep1),
+                subtitle: L(.iStep1Sub),
                 active: currentStep == 1,
                 complete: model.isInstalled
             )
             GuideStep(
                 number: 2,
-                title: "Жүйелік растау",
-                subtitle: "macOS жүйесінде QazaqType-ты қосу",
+                title: L(.iStep2),
+                subtitle: L(.iStep2Sub),
                 active: currentStep == 2,
                 complete: model.isEnabled
             )
             GuideStep(
                 number: 3,
-                title: "Пайдалануды бастау",
-                subtitle: "Мәзір жолағынан енгізу әдісін ауыстыру",
+                title: L(.iStep3),
+                subtitle: L(.iStep3Sub),
                 active: currentStep == 3,
                 complete: model.isSelected
             )
 
             Spacer()
+            Picker(selection: $model.language) {
+                ForEach(QazaqLanguage.allCases) { language in
+                    Text(language.nativeName).tag(language)
+                }
+            } label: {
+                Image(systemName: "globe")
+            }
+            .help(L(.language))
             VStack(alignment: .leading, spacing: 7) {
-                Text("Әзірлеуші")
+                Text(L(.iDeveloper))
                     .font(.caption.bold())
                     .foregroundColor(.secondary)
                 Text("Qadyrjan Paizollauly")
@@ -853,10 +890,10 @@ private struct InstallerRootView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                StatusItem(title: "Енгізу әдісінің файлы орнатылды", complete: model.isInstalled)
-                StatusItem(title: "Енгізу режимі тіркелді", complete: model.isRegistered)
-                StatusItem(title: "QazaqType қосылды", complete: model.isEnabled)
-                StatusItem(title: "QazaqType таңдалды", complete: model.isSelected)
+                StatusItem(title: L(.iStatusInstalled), complete: model.isInstalled)
+                StatusItem(title: L(.iStatusRegistered), complete: model.isRegistered)
+                StatusItem(title: L(.iStatusEnabled), complete: model.isEnabled)
+                StatusItem(title: L(.iStatusSelected), complete: model.isSelected)
             }
             .padding(18)
             .background(Color.secondary.opacity(0.07))
@@ -865,7 +902,7 @@ private struct InstallerRootView: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "info.circle.fill")
                     .foregroundColor(.accentColor)
-                Text(model.detail)
+                Text(model.detail.string)
                     .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -877,12 +914,12 @@ private struct InstallerRootView: View {
             if model.isEnabled {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Жылдам тексеру")
+                        Text(L(.iQuickTest))
                             .font(.headline)
                         Spacer()
-                        Picker("Пернетақта", selection: $layout) {
-                            Text("Латын").tag(QazaqPreferences.latinLayout)
-                            Text("Орысша ЙЦУКЕН").tag(QazaqPreferences.cyrillicLayout)
+                        Picker(L(.keyboard), selection: $layout) {
+                            Text(L(.iLayoutLatin)).tag(QazaqPreferences.latinLayout)
+                            Text(L(.iLayoutCyrillic)).tag(QazaqPreferences.cyrillicLayout)
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
@@ -893,11 +930,11 @@ private struct InstallerRootView: View {
                     }
                     Text(
                         layout == QazaqPreferences.cyrillicLayout
-                            ? "Мәзір жолағынан QazaqType-ты таңдап, Казакстан деп теріңіз"
-                            : "Мәзір жолағынан QazaqType-ты таңдап, qazaq деп теріңіз"
+                            ? L(.iTryCyrillic)
+                            : L(.iTryLatin)
                     )
                     .foregroundColor(.secondary)
-                    TextField("Осы жерде тексеріңіз", text: $testText)
+                    TextField(L(.iTestPlaceholder), text: $testText)
                         .textFieldStyle(.roundedBorder)
                 }
             }
@@ -905,7 +942,7 @@ private struct InstallerRootView: View {
             Spacer()
 
             HStack {
-                Button("Пернетақта баптауларын ашу") {
+                Button(L(.iOpenKeyboard)) {
                     model.openKeyboardSettings()
                 }
                 Spacer()

@@ -58,6 +58,7 @@ cp "$source_dir/Info.plist" "$bundle_dir/Contents/Info.plist"
     -c "Set :CFBundleShortVersionString $version" \
     -c "Set :CFBundleVersion $build_number" \
     "$bundle_dir/Contents/Info.plist"
+ditto "$source_dir/Resources" "$resources_dir"
 ditto "$build_dir/QazaqType.app" "$resources_dir/QazaqType.app"
 cp \
     "$build_dir/QazaqType.app/Contents/Resources/QazaqType.tiff" \
