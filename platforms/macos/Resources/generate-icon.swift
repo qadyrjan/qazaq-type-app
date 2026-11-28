@@ -65,20 +65,51 @@ writeTIFF(image, to: CommandLine.arguments[1], name: "app icon")
 
 // Menu bar icon: a template badge with the letters cut out, like the system
 // "ABC" badge. macOS tints it for light and dark menu bars.
-let menuSize = NSSize(width: 32, height: 32)
-let menuImage = NSImage(size: menuSize)
-menuImage.lockFocus()
-let badge = NSRect(x: 1, y: 6, width: 30, height: 20)
-NSColor.black.setFill()
-NSBezierPath(roundedRect: badge, xRadius: 4, yRadius: 4).fill()
-NSGraphicsContext.current?.compositingOperation = .destinationOut
-drawCentered(
-    logoText,
-    in: badge,
-    font: NSFont.systemFont(ofSize: 15, weight: .heavy),
-    color: .black
-)
-NSGraphicsContext.current?.compositingOperation = .sourceOver
-menuImage.unlockFocus()
+//
+// Input source icons are 16x16 points, like Apple's own. A larger canvas is
+// scaled down by macOS, which made the badge small and off-centre. Both the
+// 1x and 2x bitmaps are drawn at their own pixel size so the edges stay sharp.
+let menuPoints = NSSize(width: 16, height: 16)
+
+func menuBitmap(scale: CGFloat) -> NSBitmapImageRep {
+    let pixels = Int(menuPoints.width * scale)
+    guard let rep = NSBitmapImageRep(
+        bitmapDataPlanes: nil,
+        pixelsWide: pixels,
+        pixelsHigh: pixels,
+        bitsPerSample: 8,
+        samplesPerPixel: 4,
+        hasAlpha: true,
+        isPlanar: false,
+        colorSpaceName: .deviceRGB,
+        bytesPerRow: 0,
+        bitsPerPixel: 0
+    ), let context = NSGraphicsContext(bitmapImageRep: rep) else {
+        fputs("failed to create the menu icon bitmap\n", stderr)
+        exit(EXIT_FAILURE)
+    }
+    rep.size = menuPoints
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = context
+    context.cgContext.scaleBy(x: scale, y: scale)
+
+    let badge = NSRect(x: 0.5, y: 2, width: 15, height: 12)
+    NSColor.black.setFill()
+    NSBezierPath(roundedRect: badge, xRadius: 2.5, yRadius: 2.5).fill()
+    context.compositingOperation = .destinationOut
+    drawCentered(
+        logoText,
+        in: badge,
+        font: NSFont.systemFont(ofSize: 8.5, weight: .heavy),
+        color: .black
+    )
+    context.flushGraphics()
+    NSGraphicsContext.restoreGraphicsState()
+    return rep
+}
+
+let menuImage = NSImage(size: menuPoints)
+menuImage.addRepresentation(menuBitmap(scale: 1))
+menuImage.addRepresentation(menuBitmap(scale: 2))
 menuImage.isTemplate = true
 writeTIFF(menuImage, to: CommandLine.arguments[2], name: "menu icon")
