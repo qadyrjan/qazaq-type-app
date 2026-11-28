@@ -1,12 +1,13 @@
 import Foundation
 
 /// Interface languages of the settings window, update alert and input menu.
+/// Kazakh is the default until the user picks another language.
 enum QazaqLanguage: String, CaseIterable, Identifiable {
-    case system
     case kazakh = "kk"
     case english = "en"
     case chinese = "zh"
     case russian = "ru"
+    case system
 
     var id: String { rawValue }
 
@@ -59,6 +60,7 @@ enum QazaqText {
     case menuLatin, menuCyrillic, menuSettings
     // Installer
     case iWindowTitle
+    case iOpenPrivacy
     case iWelcomeDetail
     case iBtnReinstall
     case iBtnInstall
@@ -739,5 +741,11 @@ private let qazaqStrings: [QazaqText: [QazaqLanguage: String]] = [
         .english: "QazaqType Installer",
         .chinese: "QazaqType 安装程序",
         .russian: "Установщик QazaqType",
+    ],
+    .iOpenPrivacy: [
+        .kazakh: "Құпиялық және қауіпсіздік баптауларын ашу",
+        .english: "Open Privacy & Security",
+        .chinese: "打开“隐私与安全性”设置",
+        .russian: "Открыть «Конфиденциальность и безопасность»",
     ],
 ]

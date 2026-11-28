@@ -375,6 +375,23 @@ private final class InstallerModel: ObservableObject {
         Thread.sleep(forTimeInterval: 0.3)
     }
 
+    /// macOS may ask to approve or unblock the input method there.
+    var showsPrivacySettings: Bool {
+        stage == .needsActivation || stage == .needsLoginRefresh || stage == .failed
+    }
+
+    func openPrivacySettings() {
+        let value: String
+        if #available(macOS 13, *) {
+            value = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension"
+        } else {
+            value = "x-apple.systempreferences:com.apple.preference.security"
+        }
+        if let url = URL(string: value) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     func openKeyboardSettings() {
         let urls = [
             "x-apple.systempreferences:com.apple.Keyboard-Settings.extension",
@@ -942,8 +959,15 @@ private struct InstallerRootView: View {
             Spacer()
 
             HStack {
-                Button(L(.iOpenKeyboard)) {
-                    model.openKeyboardSettings()
+                VStack(alignment: .leading, spacing: 8) {
+                    if model.showsPrivacySettings {
+                        Button(L(.iOpenPrivacy)) {
+                            model.openPrivacySettings()
+                        }
+                    }
+                    Button(L(.iOpenKeyboard)) {
+                        model.openKeyboardSettings()
+                    }
                 }
                 Spacer()
                 if model.stage == .installing {

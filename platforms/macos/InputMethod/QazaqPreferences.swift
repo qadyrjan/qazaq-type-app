@@ -107,7 +107,7 @@ enum QazaqPreferences {
     static func loadLanguage() -> QazaqLanguage {
         let value = UserDefaults(suiteName: suiteName)?
             .string(forKey: Key.language)
-        return value.flatMap(QazaqLanguage.init(rawValue:)) ?? .system
+        return value.flatMap(QazaqLanguage.init(rawValue:)) ?? .kazakh
     }
 
     /// Changes only the interface language, keeping every other setting.
