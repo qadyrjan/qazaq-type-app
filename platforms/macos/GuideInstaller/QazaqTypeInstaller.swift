@@ -9,6 +9,9 @@ private enum InstallerConstants {
         "kz.qazaqtype.inputmethod.QazaqType.Kazakh"
     static let legacyInputMethodBundleIdentifier =
         "kz.qazaqtype.inputmethod"
+    static let settingsBundleIdentifier = "kz.qazaqtype.settings"
+    static let lsregister =
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 }
 
 private enum InstallerStage {
@@ -43,11 +46,14 @@ private final class InstallerModel: ObservableObject {
     var primaryButtonTitle: String {
         switch stage {
         case .welcome:
-            return hasLegacySystemInstallation ? "Жаңарту" : "Орнату"
+            if hasLegacySystemInstallation {
+                return "Жаңарту"
+            }
+            return isInstalled ? "Қайта орнату" : "Орнату"
         case .installing:
             return "Орнатылуда…"
         case .needsLoginRefresh:
-            return "Қайта тексеру"
+            return "Қайта орнату"
         case .needsActivation:
             return "QazaqType-ты қосу"
         case .updateAvailable:
@@ -89,7 +95,7 @@ private final class InstallerModel: ObservableObject {
         case .installing:
             return "QazaqType көшіріліп, тіркеліп және macOS жүйесінде қосылуда."
         case .needsLoginRefresh:
-            return "macOS QazaqType-ты енгізу әдістері тізіміне әлі қоспады. Жүйеден шығып, қайта кірген соң орнатқышты қайта ашыңыз."
+            return "macOS QazaqType-ты енгізу әдістері тізіміне әлі қоспады. Алдымен «Қайта орнату» түймесін басыңыз. Көмектеспесе, жүйеден шығып, қайта кіріңіз де, орнатқышты қайта ашыңыз."
         case .needsActivation:
             return "macOS растау сұрағын көрсетсе, «Рұқсат ету» түймесін басыңыз немесе пернетақта баптауларынан қолмен қосыңыз."
         case .updateAvailable:
@@ -103,13 +109,10 @@ private final class InstallerModel: ObservableObject {
 
     func runPrimaryAction() {
         switch stage {
-        case .welcome, .failed, .updateAvailable:
+        case .welcome, .failed, .updateAvailable, .needsLoginRefresh:
+            // A copy that macOS has not picked up is reinstalled from scratch:
+            // that also clears quarantine flags and stale registrations.
             install()
-        case .needsLoginRefresh:
-            refreshState()
-            if isRegistered {
-                activate()
-            }
         case .needsActivation:
             activate()
         case .ready:
@@ -124,45 +127,62 @@ private final class InstallerModel: ObservableObject {
         stage = .installing
         detail = isUpdating ? "QazaqType жаңартылуда…" : "QazaqType дайындалуда…"
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        // File work runs off the main thread so the window stays responsive.
+        DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let sourceURL = try self.embeddedInputMethodURL()
-                if self.hasLegacySystemInstallation {
-                    self.detail =
-                        "Ескі жүйелік нұсқа табылды. Оны көшіру үшін әкімші рұқсаты сұралуда…"
-                    try self.migrateLegacySystemInstallation()
-                }
-                let destinationURL = try self.installDestination(
-                    embeddedSource: sourceURL
-                )
-                // The old version keeps running from memory until it quits.
-                // macOS starts the new copy on the next key press.
+                self.setDetail("Ескі нұсқалар тоқтатылып, тазалануда…")
                 self.stopRunningInputMethod()
-
-                let registerStatus = TISRegisterInputSource(
-                    destinationURL as CFURL
-                )
-                guard registerStatus == noErr else {
-                    throw InstallerError.message(
-                        "Енгізу әдісін тіркеу сәтсіз аяқталды. Қате коды: \(registerStatus)"
-                    )
-                }
-
-                self.isInstalled = true
-                self.detail = "QazaqType көшіріліп, тіркелді. macOS енгізу көздерін жаңартуда…"
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    self.refreshState()
-                    if self.isRegistered {
-                        self.activate()
-                    } else {
-                        self.stage = .needsLoginRefresh
-                        self.detail =
-                            "Файл дұрыс орнатылды, бірақ ағымдағы сеанс жаңа енгізу режимін әлі жүктемеді."
-                    }
+                try self.removeOldCopies()
+                self.setDetail("Жаңа нұсқа көшірілуде…")
+                let destinationURL = try self.copyInputMethod(from: sourceURL)
+                DispatchQueue.main.async {
+                    self.register(destinationURL)
                 }
             } catch {
-                self.fail(error.localizedDescription)
+                DispatchQueue.main.async {
+                    self.fail(error.localizedDescription)
+                }
             }
+        }
+    }
+
+    private func register(_ destinationURL: URL) {
+        LSRegisterURL(destinationURL as CFURL, true)
+        let registerStatus = TISRegisterInputSource(destinationURL as CFURL)
+        guard registerStatus == noErr else {
+            fail("Енгізу әдісін тіркеу сәтсіз аяқталды. Қате коды: \(registerStatus)")
+            return
+        }
+        disableLegacyInputSources()
+
+        isInstalled = true
+        detail = "QazaqType көшіріліп, тіркелді. macOS енгізу көздерін жаңартуда…"
+        waitForRegistration(of: destinationURL, attempt: 0)
+    }
+
+    /// macOS publishes a new input source asynchronously, sometimes only
+    /// after several seconds, so poll instead of checking once.
+    private func waitForRegistration(of destinationURL: URL, attempt: Int) {
+        if mainInputSource() != nil || inputMode() != nil {
+            refreshState()
+            activate()
+            return
+        }
+        if attempt == 4 {
+            // A fresh process has no cached input source list; registering
+            // from the input method itself also nudges the system.
+            runInputMethodCommand(destinationURL, "--register-input-source")
+        }
+        guard attempt < 24 else {
+            refreshState()
+            stage = .needsLoginRefresh
+            detail =
+                "Файл дұрыс орнатылды, бірақ ағымдағы сеанс жаңа енгізу режимін әлі жүктемеді."
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.waitForRegistration(of: destinationURL, attempt: attempt + 1)
         }
     }
 
@@ -181,14 +201,22 @@ private final class InstallerModel: ObservableObject {
             fail("Енгізу әдісін қосу сәтсіз аяқталды. Қате коды: \(enableStatus)")
             return
         }
+        waitForActivation(attempt: 0)
+    }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+    private func waitForActivation(attempt: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             if let mode = self.inputMode() {
                 _ = TISEnableInputSource(mode)
             }
             self.refreshState()
             guard self.isEnabled, let refreshedSource = self.inputMode()
             else {
+                if attempt < 8 {
+                    self.stage = .installing
+                    self.waitForActivation(attempt: attempt + 1)
+                    return
+                }
                 self.stage = .needsActivation
                 self.detail =
                     "macOS әлі растаған жоқ. Жүйелік сұрауда «Рұқсат ету» пәрменін таңдап, қайта көріңіз."
@@ -210,6 +238,12 @@ private final class InstallerModel: ObservableObject {
         }
     }
 
+    private func setDetail(_ value: String) {
+        DispatchQueue.main.async {
+            self.detail = value
+        }
+    }
+
     func refreshState() {
         hasLegacySystemInstallation =
             isKnownInputMethodBundle(at: systemInputMethodURL)
@@ -220,12 +254,13 @@ private final class InstallerModel: ObservableObject {
             ? shortVersion(at: userInputMethodURL)
             : nil
         embeddedVersion = (try? embeddedInputMethodURL()).flatMap(shortVersion(at:))
+        let canRefreshStage = stage != .installing && stage != .failed
 
         if hasLegacySystemInstallation && !hasUserInstallation {
             isRegistered = false
             isEnabled = false
             isSelected = false
-            if stage != .installing && stage != .failed {
+            if canRefreshStage {
                 stage = .welcome
                 detail =
                     "Ескі жүйелік нұсқа табылды. Жаңарту кезінде macOS әкімші рұқсатын сұрайды."
@@ -233,14 +268,35 @@ private final class InstallerModel: ObservableObject {
             return
         }
 
+        // An older copy is always replaced, whether or not macOS loaded it.
+        let isOutdated: Bool = {
+            guard hasUserInstallation, let embeddedVersion else {
+                return false
+            }
+            guard let installedVersion else {
+                return true
+            }
+            return isVersion(embeddedVersion, newerThan: installedVersion)
+        }()
+
         let mode = inputMode()
         let mainSource = mainInputSource()
         guard mode != nil || mainSource != nil else {
             isRegistered = false
             isEnabled = false
             isSelected = false
-            if stage != .installing && stage != .failed {
-                stage = isInstalled ? .needsLoginRefresh : .welcome
+            if canRefreshStage {
+                if isOutdated {
+                    stage = .updateAvailable
+                    detail = "Жаңарту ескі нұсқаны толық алмастырады. Пернетақта таңдауыңыз бен басқа баптаулар өзгермейді."
+                } else if hasUserInstallation && isQuarantined(userInputMethodURL) {
+                    // Copied by an older installer with the download flag,
+                    // which keeps macOS from loading the input method.
+                    stage = .welcome
+                    detail = "Орнатылған көшірмені macOS бұғаттап тұр. «Қайта орнату» түймесін басыңыз."
+                } else {
+                    stage = isInstalled ? .needsLoginRefresh : .welcome
+                }
             }
             return
         }
@@ -259,11 +315,10 @@ private final class InstallerModel: ObservableObject {
             key: kTISPropertyInputSourceIsSelected
         )
 
-        if stage != .installing && stage != .failed {
-            if let installedVersion, let embeddedVersion,
-               isVersion(embeddedVersion, newerThan: installedVersion) {
+        if canRefreshStage {
+            if isOutdated {
                 stage = .updateAvailable
-                detail = "Жаңарту ескі нұсқаны алмастырады. Пернетақта таңдауыңыз бен басқа баптаулар өзгермейді."
+                detail = "Жаңарту ескі нұсқаны толық алмастырады. Пернетақта таңдауыңыз бен басқа баптаулар өзгермейді."
             } else {
                 stage = isEnabled ? .ready : .needsActivation
             }
@@ -293,18 +348,30 @@ private final class InstallerModel: ObservableObject {
         return false
     }
 
+    /// Quits every running copy (input method, its settings helper, and the
+    /// pre-1.0 bundle) so no old code stays loaded after the files change.
     private func stopRunningInputMethod() {
-        let running = NSRunningApplication.runningApplications(
-            withBundleIdentifier: InstallerConstants.inputMethodBundleIdentifier
-        )
+        let identifiers = [
+            InstallerConstants.inputMethodBundleIdentifier,
+            InstallerConstants.legacyInputMethodBundleIdentifier,
+            InstallerConstants.settingsBundleIdentifier,
+        ]
+        let running = identifiers.flatMap {
+            NSRunningApplication.runningApplications(withBundleIdentifier: $0)
+        }
         for application in running {
             application.terminate()
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            for application in running where !application.isTerminated {
-                application.forceTerminate()
-            }
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline && running.contains(where: { !$0.isTerminated }) {
+            Thread.sleep(forTimeInterval: 0.1)
         }
+        for application in running where !application.isTerminated {
+            application.forceTerminate()
+        }
+        // Input methods started by the system are not always listed above.
+        _ = runTool("/usr/bin/pkill", ["-9", "-f", "/Input Methods/QazaqType.app/Contents/"])
+        Thread.sleep(forTimeInterval: 0.3)
     }
 
     func openKeyboardSettings() {
@@ -352,73 +419,169 @@ private final class InstallerModel: ObservableObject {
         return url
     }
 
-    private func installDestination(embeddedSource: URL) throws -> URL {
-        let parentURL = userInputMethodURL.deletingLastPathComponent()
+    /// Removes every earlier QazaqType bundle: user and system copies (under
+    /// any name), backups left by older installers, and their Launch
+    /// Services records, which could otherwise start an old version.
+    private func removeOldCopies() throws {
+        let protected = Set(
+            [(try? embeddedInputMethodURL())?.standardizedFileURL.path]
+                .compactMap { $0 }
+        )
+        var removable: [URL] = []
+        removable += knownBundles(in: userInputMethodURL.deletingLastPathComponent())
+        removable += knownBundles(in: systemInputMethodURL.deletingLastPathComponent())
+        removable += knownBundles(in: URL(fileURLWithPath: "/Users/Shared", isDirectory: true)) {
+            $0.hasPrefix("QazaqType")
+        }
+        removable = removable.filter { !protected.contains($0.standardizedFileURL.path) }
+
+        var needsAdministrator: [URL] = []
+        for url in removable {
+            unregisterFromLaunchServices(url)
+            do {
+                try fileManager.removeItem(at: url)
+            } catch {
+                if fileManager.fileExists(atPath: url.path) {
+                    needsAdministrator.append(url)
+                }
+            }
+        }
+
+        if !needsAdministrator.isEmpty {
+            setDetail("Ескі жүйелік нұсқаны жою үшін әкімші рұқсаты сұралуда…")
+            let command = "/bin/rm -rf "
+                + needsAdministrator.map { shellQuoted($0.path) }.joined(separator: " ")
+            try runAsAdministrator(command)
+            if needsAdministrator.contains(where: { fileManager.fileExists(atPath: $0.path) }) {
+                throw InstallerError.message("Ескі нұсқаны жою мүмкін болмады. Қайталап көріңіз.")
+            }
+        }
+
+        // Copies elsewhere (Trash, an old installer in Applications, a mounted
+        // disk image) stay on disk but must not be launched by bundle ID.
+        for identifier in [
+            InstallerConstants.inputMethodBundleIdentifier,
+            InstallerConstants.legacyInputMethodBundleIdentifier,
+        ] {
+            let urls = LSCopyApplicationURLsForBundleIdentifier(identifier as CFString, nil)?
+                .takeRetainedValue() as? [URL] ?? []
+            for url in urls where !protected.contains(url.standardizedFileURL.path) {
+                unregisterFromLaunchServices(url)
+            }
+        }
+        DispatchQueue.main.sync {
+            self.hasLegacySystemInstallation = false
+        }
+    }
+
+    private func knownBundles(
+        in directory: URL,
+        where nameMatches: (String) -> Bool = { _ in true }
+    ) -> [URL] {
+        let names = (try? fileManager.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names
+            .filter { $0.hasSuffix(".app") && nameMatches($0) }
+            .map { directory.appendingPathComponent($0, isDirectory: true) }
+            .filter(isKnownInputMethodBundle(at:))
+    }
+
+    private func copyInputMethod(from sourceURL: URL) throws -> URL {
+        let destinationURL = userInputMethodURL
+        let parentURL = destinationURL.deletingLastPathComponent()
         try fileManager.createDirectory(
             at: parentURL,
             withIntermediateDirectories: true
         )
-
-        if fileManager.fileExists(atPath: userInputMethodURL.path) {
-            guard isKnownInputMethodBundle(at: userInputMethodURL)
-            else {
-                throw InstallerError.message(
-                    "Орнату орнында аттас басқа қолданба бар. Оны қорғау үшін орнату тоқтатылды."
-                )
-            }
-            try fileManager.removeItem(at: userInputMethodURL)
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            throw InstallerError.message(
+                "Орнату орнында аттас басқа қолданба бар. Оны қорғау үшін орнату тоқтатылды."
+            )
         }
 
-        try fileManager.copyItem(
-            at: embeddedSource,
-            to: userInputMethodURL
+        // `--noqtn` drops the download quarantine flag: macOS does not load a
+        // quarantined input method from ~/Library/Input Methods.
+        let (copyStatus, copyOutput) = runTool(
+            "/usr/bin/ditto",
+            ["--noqtn", sourceURL.path, destinationURL.path]
         )
-        return userInputMethodURL
+        guard copyStatus == 0 else {
+            throw InstallerError.message("Енгізу әдісін көшіру мүмкін болмады: \(copyOutput)")
+        }
+        _ = runTool("/usr/bin/xattr", ["-dr", "com.apple.quarantine", destinationURL.path])
+
+        let (verifyStatus, verifyOutput) = runTool(
+            "/usr/bin/codesign",
+            ["--verify", "--deep", "--strict", destinationURL.path]
+        )
+        guard verifyStatus == 0 else {
+            throw InstallerError.message("Көшірілген енгізу әдісінің қолтаңбасы жарамсыз: \(verifyOutput)")
+        }
+
+        // The input source server watches the folder's modification date.
+        try? fileManager.setAttributes(
+            [.modificationDate: Date()],
+            ofItemAtPath: parentURL.path
+        )
+        return destinationURL
     }
 
-    private func migrateLegacySystemInstallation() throws {
-        guard isKnownInputMethodBundle(at: systemInputMethodURL)
-        else {
+    private func isQuarantined(_ url: URL) -> Bool {
+        getxattr(url.path, "com.apple.quarantine", nil, 0, 0, 0) >= 0
+    }
+
+    private func unregisterFromLaunchServices(_ url: URL) {
+        _ = runTool(InstallerConstants.lsregister, ["-u", url.path])
+    }
+
+    private func disableLegacyInputSources() {
+        let filter = [
+            kTISPropertyBundleID as String:
+                InstallerConstants.legacyInputMethodBundleIdentifier
+        ] as CFDictionary
+        guard let list = TISCreateInputSourceList(filter, true) else {
             return
         }
+        for source in list.takeRetainedValue() as! [TISInputSource] {
+            _ = TISDisableInputSource(source)
+        }
+    }
 
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyyMMddHHmmss"
-        let backupURL = URL(
-            fileURLWithPath:
-                "/Users/Shared/QazaqType-system-backup-"
-                + formatter.string(from: Date())
-                + ".app",
-            isDirectory: true
-        )
-        let command =
-            "/bin/mv "
-            + shellQuoted(systemInputMethodURL.path)
-            + " "
-            + shellQuoted(backupURL.path)
-        let source =
-            "do shell script \""
-            + appleScriptQuoted(command)
+    private func runInputMethodCommand(_ bundleURL: URL, _ argument: String) {
+        let executable = bundleURL.appendingPathComponent("Contents/MacOS/QazaqType").path
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = self.runTool(executable, [argument])
+        }
+    }
+
+    private func runAsAdministrator(_ command: String) throws {
+        let script = "do shell script \"" + appleScriptQuoted(command)
             + "\" with administrator privileges"
-        guard let script = NSAppleScript(source: source) else {
-            throw InstallerError.message("Жүйелік рұқсат сұрауын дайындау мүмкін болмады.")
+        let (status, output) = runTool("/usr/bin/osascript", ["-e", script])
+        guard status == 0 else {
+            throw InstallerError.message(
+                output.contains("-128") ? "Әкімші рұқсаты берілмеді." : output
+            )
         }
+    }
 
-        var error: NSDictionary?
-        _ = script.executeAndReturnError(&error)
-        if let error {
-            let message =
-                error[NSAppleScript.errorMessage] as? String
-                ?? "Әкімші рұқсаты берілмеді."
-            throw InstallerError.message(message)
+    @discardableResult
+    private func runTool(_ path: String, _ arguments: [String]) -> (Int32, String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = arguments
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+        } catch {
+            return (-1, error.localizedDescription)
         }
-
-        guard !fileManager.fileExists(atPath: systemInputMethodURL.path) else {
-            throw InstallerError.message("Ескі жүйелік нұсқаны көшіру мүмкін болмады. Қайталап көріңіз.")
-        }
-        detail = "Ескі нұсқа \(backupURL.path) мекенжайына сақталды. Жаңа нұсқа орнатылуда…"
-        hasLegacySystemInstallation = false
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let output = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (process.terminationStatus, output)
     }
 
     private func shellQuoted(_ value: String) -> String {
@@ -473,6 +636,7 @@ private final class InstallerModel: ObservableObject {
     }
 
     private func isPersistedInEnabledInputSources() -> Bool {
+        CFPreferencesAppSynchronize("com.apple.HIToolbox" as CFString)
         guard let value = CFPreferencesCopyAppValue(
             "AppleEnabledInputSources" as CFString,
             "com.apple.HIToolbox" as CFString

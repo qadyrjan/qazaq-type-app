@@ -1,17 +1,22 @@
 #!/bin/sh
 set -eu
 
-destination="${HOME:?}/Library/Input Methods/QazaqType.app"
+lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+user_dir="${HOME:?}/Library/Input Methods"
+system_dir="/Library/Input Methods"
 
-if [ ! -e "$destination" ]; then
-    echo "QazaqType is not installed."
-    exit 0
-fi
+pkill -9 -f "/Input Methods/QazaqType.app/Contents/" 2>/dev/null || true
 
-trash_destination="${HOME:?}/.Trash/QazaqType.app.$(date +%Y%m%d%H%M%S)"
-mv "$destination" "$trash_destination"
-touch "${HOME:?}/Library/Input Methods"
+for bundle in "$user_dir/QazaqType.app" "$system_dir/QazaqType.app" /Users/Shared/QazaqType*.app; do
+    [ -e "$bundle" ] || continue
+    "$lsregister" -u "$bundle" 2>/dev/null || true
+    if rm -rf "$bundle" 2>/dev/null && [ ! -e "$bundle" ]; then
+        echo "Removed: $bundle"
+    else
+        sudo rm -rf "$bundle"
+        echo "Removed with administrator rights: $bundle"
+    fi
+done
+touch "$user_dir" 2>/dev/null || true
 
-echo "Moved the installed input method to: $trash_destination"
 echo "Log out and back in if QazaqType remains visible in Input Sources."
-
