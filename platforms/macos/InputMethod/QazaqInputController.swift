@@ -97,13 +97,13 @@ final class QazaqInputController: IMKInputController {
     override func menu() -> NSMenu! {
         let menu = NSMenu(title: "QazaqType")
         let latin = NSMenuItem(
-            title: "Латын пернетақтасы (q → қ, aa → ә)",
+            title: L(.menuLatin),
             action: #selector(selectLatinLayout(_:)),
             keyEquivalent: ""
         )
         latin.state = runtimeConfig.layout == QazaqPreferences.latinLayout ? .on : .off
         let cyrillic = NSMenuItem(
-            title: "Орыс пернетақтасы — ЙЦУКЕН (аа → ә, ии → і)",
+            title: L(.menuCyrillic),
             action: #selector(selectCyrillicLayout(_:)),
             keyEquivalent: ""
         )
@@ -113,7 +113,7 @@ final class QazaqInputController: IMKInputController {
         menu.addItem(.separator())
         menu.addItem(
             NSMenuItem(
-                title: "QazaqType баптаулары…",
+                title: L(.menuSettings),
                 action: #selector(openSettings(_:)),
                 keyEquivalent: ""
             )

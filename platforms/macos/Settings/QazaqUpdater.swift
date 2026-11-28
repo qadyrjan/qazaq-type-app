@@ -114,11 +114,11 @@ enum QazaqUpdater {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.icon = NSApp.applicationIconImage
-        alert.messageText = "QazaqType \(release.version) шықты"
+        alert.messageText = L(.updateTitle, release.version)
         alert.informativeText =
-            "Сізде \(installed) нұсқасы орнатылған. Жаңа нұсқа жүктеліп, орнатқыш ашылады — сонда «Жаңарту» батырмасын басыңыз. Баптауларыңыз сақталады."
-        alert.addButton(withTitle: "Жаңарту")
-        alert.addButton(withTitle: "Кейін")
+            L(.updateBody, installed)
+        alert.addButton(withTitle: L(.updateNow))
+        alert.addButton(withTitle: L(.updateLater))
         guard alert.runModal() == .alertFirstButtonReturn else {
             completion()
             return

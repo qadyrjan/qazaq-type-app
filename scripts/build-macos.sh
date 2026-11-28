@@ -123,6 +123,7 @@ for architecture in $architectures; do
         -import-objc-header "$source_dir/QazaqCore.h" \
         "$source_dir/main.swift" \
         "$source_dir/QazaqPreferences.swift" \
+        "$source_dir/QazaqStrings.swift" \
         "$source_dir/QazaqInputController.swift" \
         "$client_bridge_object" \
         "$project_dir/target/$rust_target/release/libqazaqtype_core_ffi.a" \
@@ -141,6 +142,7 @@ for architecture in $architectures; do
         -module-cache-path "$architecture_module_cache" \
         -Xcc "-fmodules-cache-path=$architecture_module_cache" \
         "$source_dir/QazaqPreferences.swift" \
+        "$source_dir/QazaqStrings.swift" \
         "$settings_source_dir/QazaqUpdater.swift" \
         "$settings_source_dir/QazaqTypeSettings.swift" \
         -framework AppKit \

@@ -17,7 +17,7 @@ struct QazaqTypeSettingsApp: App {
     var body: some Scene {
         WindowGroup {
             SettingsRootView(model: model)
-                .frame(minWidth: 560, minHeight: 430)
+                .frame(minWidth: 560, minHeight: 470)
         }
         .windowStyle(.titleBar)
     }
@@ -30,6 +30,9 @@ private final class SettingsModel: ObservableObject {
     @Published var showModeNotification: Bool
     @Published var layout: UInt32
     @Published var checkForUpdates: Bool
+    @Published var language: QazaqLanguage {
+        didSet { QazaqPreferences.saveLanguage(language) }
+    }
 
     init() {
         let config = QazaqPreferences.load()
@@ -39,6 +42,7 @@ private final class SettingsModel: ObservableObject {
         showModeNotification = config.showModeNotification
         layout = config.layout
         checkForUpdates = config.checkForUpdates
+        language = QazaqPreferences.loadLanguage()
     }
 
     func save() {
@@ -71,15 +75,24 @@ private struct SettingsRootView: View {
     var body: some View {
         TabView {
             GeneralSettingsView(model: model)
-                .tabItem { Label("Жалпы", systemImage: "gearshape") }
+                .tabItem { Label(L(.tabGeneral), systemImage: "gearshape") }
             InputRulesView(layout: model.layout)
-                .tabItem { Label("Ережелер", systemImage: "character.book.closed") }
+                .tabItem { Label(L(.tabRules), systemImage: "character.book.closed") }
             PrivacyView()
-                .tabItem { Label("Құпиялық", systemImage: "hand.raised") }
+                .tabItem { Label(L(.tabPrivacy), systemImage: "hand.raised") }
             AboutView()
                 .tabItem { Label("QazaqType", systemImage: "info.circle") }
         }
         .padding(20)
+        // Rebuild every view when the language changes so all text updates.
+        .id(model.language)
+        .navigationTitle(L(.windowTitle))
+        .onAppear {
+            NSApp.windows.first?.title = L(.windowTitle)
+        }
+        .onChange(of: model.language) { _ in
+            NSApp.windows.first?.title = L(.windowTitle)
+        }
     }
 }
 
@@ -88,26 +101,35 @@ private struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Toggle("Қазақша түрлендіруді қосу", isOn: $model.enabled)
+            Picker(L(.language), selection: $model.language) {
+                ForEach(QazaqLanguage.allCases) { language in
+                    Text(language.nativeName).tag(language)
+                }
+            }
+            .frame(maxWidth: 320)
+
+            Divider()
+
+            Toggle(L(.enableConversion), isOn: $model.enabled)
                 .onChange(of: model.enabled) { _ in model.save() }
 
-            Picker("Пернетақта", selection: $model.layout) {
-                Text("Латын (q → қ)").tag(QazaqPreferences.latinLayout)
-                Text("Орысша ЙЦУКЕН (аа → ә)").tag(QazaqPreferences.cyrillicLayout)
+            Picker(L(.keyboard), selection: $model.layout) {
+                Text(L(.keyboardLatin)).tag(QazaqPreferences.latinLayout)
+                Text(L(.keyboardCyrillic)).tag(QazaqPreferences.cyrillicLayout)
             }
             .pickerStyle(.segmented)
             .onChange(of: model.layout) { _ in model.save() }
 
-            Picker("Бастапқы режим", selection: $model.defaultMode) {
-                Text("KZ — Қазақша").tag(UInt32(0))
-                Text("EN — English").tag(UInt32(1))
+            Picker(L(.defaultMode), selection: $model.defaultMode) {
+                Text(L(.modeKazakh)).tag(UInt32(0))
+                Text(L(.modeEnglish)).tag(UInt32(1))
             }
             .pickerStyle(.segmented)
             .onChange(of: model.defaultMode) { _ in model.save() }
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("Қос басу уақыты")
+                    Text(L(.doublePressTime))
                     Spacer()
                     Text("\(model.thresholdMilliseconds) ms")
                         .monospacedDigit()
@@ -134,20 +156,20 @@ private struct GeneralSettingsView: View {
             }
 
             Toggle(
-                "Режим ауысқанда хабарлама көрсету",
+                L(.showModeNotification),
                 isOn: $model.showModeNotification
             )
             .onChange(of: model.showModeNotification) { _ in model.save() }
 
             Toggle(
-                "Жаңартуларды күн сайын тексеру",
+                L(.checkUpdatesDaily),
                 isOn: $model.checkForUpdates
             )
             .onChange(of: model.checkForUpdates) { _ in model.save() }
 
             HStack {
                 Spacer()
-                Button("Әдепкі баптауларды қалпына келтіру") {
+                Button(L(.restoreDefaults)) {
                     model.restoreDefaults()
                 }
             }
@@ -179,12 +201,12 @@ private struct InputRulesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Қос басу ережелері")
+            Text(L(.rulesTitle))
                 .font(.title2.bold())
             Text(
                 isCyrillic
-                    ? "Орыс әріптері өз орнында. Қазақ әрпі үшін орнына жазып жүрген әріпті екі рет басыңыз. Сөз бос орын басқанда бекітіледі, ал қ, ғ, ұ, ү сөздің дауыстыларына қарап өзі таңдалады."
-                    : "Екі бірдей пернені белгіленген уақыт ішінде басыңыз."
+                    ? L(.rulesCyrillic)
+                    : L(.rulesLatin)
             )
             .foregroundColor(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -211,8 +233,8 @@ private struct InputRulesView: View {
             }
             Text(
                 isCyrillic
-                    ? "йй (латынша qq) — KZ және EN режимдерін ауыстырады"
-                    : "qq — сөз басында KZ және EN режимдерін ауыстырады"
+                    ? L(.rulesToggleCyrillic)
+                    : L(.rulesToggleLatin)
             )
             .font(.headline)
         }
@@ -223,12 +245,12 @@ private struct InputRulesView: View {
 private struct PrivacyView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Label("Барлық түрлендіру осы Mac ішінде орындалады", systemImage: "checkmark.shield")
+            Label(L(.privacyTitle), systemImage: "checkmark.shield")
                 .font(.title2.bold())
-            Text("Түрлендіру интернетсіз жұмыс істейді. Енгізу әдісінің өзі желіге ешқашан шықпайды.")
-            Text("Жаңартуларды тексеру қосулы болса, осы баптаулар көмекшісі күніне бір рет GitHub-тан соңғы нұсқа нөмірін ғана сұрайды. Оны «Жалпы» бетінде өшіруге болады.")
-            Text("Енгізілген мәтін, пернелер және жазу тарихы сақталмайды немесе серверге жіберілмейді.")
-            Text("Құпиясөз өрістері мен қауіпсіз енгізу аймақтарында macOS шектеулері толық сақталады.")
+            Text(L(.privacyOffline))
+            Text(L(.privacyUpdates))
+            Text(L(.privacyNothingStored))
+            Text(L(.privacySecureInput))
             Spacer()
         }
         .padding()
@@ -265,10 +287,10 @@ private struct AboutView: View {
                 }
             case .success, .failure(QazaqUpdater.Failure.noRelease):
                 isChecking = false
-                status = "Сізде соңғы нұсқа орнатылған."
+                status = L(.aboutUpToDate)
             case .failure:
                 isChecking = false
-                status = "Тексеру мүмкін болмады. Интернет байланысын тексеріңіз."
+                status = L(.aboutFailed)
             }
         }
     }
@@ -276,7 +298,7 @@ private struct AboutView: View {
     private var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "—"
-        return "Нұсқа \(short)"
+        return L(.aboutVersion, short)
     }
 
     var body: some View {
@@ -286,9 +308,9 @@ private struct AboutView: View {
                 .frame(width: 72, height: 72)
             Text("QazaqType").font(.largeTitle.bold())
             Text(version)
-            Text("Қазақ тіліне арналған офлайн жүйелік енгізу әдісі")
+            Text(L(.aboutTagline))
                 .foregroundColor(.secondary)
-            Button(isChecking ? "Тексерілуде…" : "Жаңартуларды тексеру") {
+            Button(isChecking ? L(.aboutChecking) : L(.aboutCheck)) {
                 checkNow()
             }
             .disabled(isChecking)

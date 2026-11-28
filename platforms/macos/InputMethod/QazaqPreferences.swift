@@ -30,6 +30,7 @@ enum QazaqPreferences {
         static let layout = "keyboardLayout"
         static let checkForUpdates = "checkForUpdates"
         static let lastUpdateCheck = "lastUpdateCheck"
+        static let language = "interfaceLanguage"
     }
 
     private static let updateCheckInterval: TimeInterval = 24 * 60 * 60
@@ -101,6 +102,21 @@ enum QazaqPreferences {
         }
         defaults.set(now.timeIntervalSince1970, forKey: Key.lastUpdateCheck)
         return true
+    }
+
+    static func loadLanguage() -> QazaqLanguage {
+        let value = UserDefaults(suiteName: suiteName)?
+            .string(forKey: Key.language)
+        return value.flatMap(QazaqLanguage.init(rawValue:)) ?? .system
+    }
+
+    /// Changes only the interface language, keeping every other setting.
+    static func saveLanguage(_ language: QazaqLanguage) {
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return
+        }
+        defaults.set(language.rawValue, forKey: Key.language)
+        postChanged()
     }
 
     /// Changes only the keyboard layout, keeping every other setting.

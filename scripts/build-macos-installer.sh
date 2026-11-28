@@ -93,6 +93,7 @@ for architecture in $architectures; do
         -module-cache-path "$module_cache" \
         -Xcc "-fmodules-cache-path=$module_cache" \
         "$macos_dir/InputMethod/QazaqPreferences.swift" \
+        "$macos_dir/InputMethod/QazaqStrings.swift" \
         "$source_dir/QazaqTypeInstaller.swift" \
         -framework AppKit \
         -framework Carbon \
